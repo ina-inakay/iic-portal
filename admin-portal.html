@@ -396,6 +396,28 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .content { padding: 16px; }
 }
 </style>
+<!-- Export Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* ── EXPORT MODAL STYLES ── */
+.export-section { margin-bottom: 18px; }
+.export-section-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--navy); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.export-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.export-card { background: var(--cream); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: all 0.18s; text-align: center; }
+.export-card:hover { border-color: var(--navy); background: var(--navy-light); }
+.export-card.selected { border-color: var(--navy); background: var(--navy-light); box-shadow: 0 0 0 3px rgba(30,58,95,0.1); }
+.export-card svg { width: 28px; height: 28px; margin-bottom: 6px; }
+.export-card-label { font-size: 0.82rem; font-weight: 600; color: var(--navy-dark); }
+.export-card-sub { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+.export-filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.export-progress { display: none; text-align: center; padding: 20px; }
+.export-progress.show { display: block; }
+.export-progress-bar { background: var(--border); border-radius: 20px; height: 6px; overflow: hidden; margin: 10px 0; }
+.export-progress-fill { height: 100%; background: linear-gradient(90deg, var(--navy), var(--steel)); border-radius: 20px; animation: exportProgress 1.5s ease-in-out infinite; }
+@keyframes exportProgress { 0%{width:10%} 50%{width:80%} 100%{width:95%} }
+</style>
 </head>
 <body>
 
@@ -477,6 +499,10 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     </button>
     <div class="topbar-title" id="topbarTitle">Dashboard</div>
     <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" onclick="openExportModal()" style="gap:6px">
+        <svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
       <div style="position:relative">
         <button class="notif-btn" onclick="toggleNotifs()" id="notifBtn">
           <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -893,7 +919,95 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   </div>
 </div>
 
+
+<!-- ═══ EXPORT MODAL ═══ -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-header">
+      <div class="modal-title">Export Data</div>
+      <button class="modal-close" onclick="closeModal('exportModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" id="exportModalBody">
+
+      <!-- Step 1: Choose what to export -->
+      <div id="exportStep1">
+        <div class="export-section">
+          <div class="export-section-title">1. Choose Data to Export</div>
+          <div class="export-options">
+            <div class="export-card selected" id="exportCard-beneficiaries" onclick="selectExportType('beneficiaries')">
+              <svg viewBox="0 0 24 24" style="stroke:var(--navy);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <div class="export-card-label">Beneficiaries</div>
+              <div class="export-card-sub">All beneficiary records & logs</div>
+            </div>
+            <div class="export-card" id="exportCard-tasks" onclick="selectExportType('tasks')">
+              <svg viewBox="0 0 24 24" style="stroke:var(--terra);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <div class="export-card-label">Tasks</div>
+              <div class="export-card-sub">Tasks & worker assignments</div>
+            </div>
+            <div class="export-card" id="exportCard-accounts" onclick="selectExportType('accounts')">
+              <svg viewBox="0 0 24 24" style="stroke:var(--amber);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div class="export-card-label">Accounts</div>
+              <div class="export-card-sub">Staff accounts & roles</div>
+            </div>
+            <div class="export-card" id="exportCard-orgchart" onclick="selectExportType('orgchart')">
+              <svg viewBox="0 0 24 24" style="stroke:var(--steel);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><rect x="8" y="2" width="8" height="4" rx="1"/><rect x="1" y="14" width="6" height="4" rx="1"/><rect x="9" y="14" width="6" height="4" rx="1"/><rect x="17" y="14" width="6" height="4" rx="1"/><path d="M4 14v-3a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v3"/><line x1="12" y1="6" x2="12" y2="10"/></svg>
+              <div class="export-card-label">Org Chart</div>
+              <div class="export-card-sub">Positions & hierarchy</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filters (dynamic based on type) -->
+        <div class="export-section" id="exportFiltersSection">
+          <div class="export-section-title">2. Filter (Optional)</div>
+          <div id="exportFilters"></div>
+        </div>
+
+        <!-- Format -->
+        <div class="export-section">
+          <div class="export-section-title">3. Choose Format</div>
+          <div class="export-options">
+            <div class="export-card selected" id="fmtCard-excel" onclick="selectFormat('excel')">
+              <svg viewBox="0 0 24 24" style="stroke:#166534;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <div class="export-card-label" style="color:#166534">Excel (.xlsx)</div>
+              <div class="export-card-sub">Spreadsheet format</div>
+            </div>
+            <div class="export-card" id="fmtCard-pdf" onclick="selectFormat('pdf')">
+              <svg viewBox="0 0 24 24" style="stroke:#DC2626;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <div class="export-card-label" style="color:#DC2626">PDF (.pdf)</div>
+              <div class="export-card-sub">Print-ready format</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress indicator -->
+      <div class="export-progress" id="exportProgress">
+        <div style="font-size:0.9rem;font-weight:600;color:var(--navy-dark);margin-bottom:8px" id="exportProgressMsg">Preparing export…</div>
+        <div class="export-progress-bar"><div class="export-progress-fill"></div></div>
+        <div style="font-size:0.75rem;color:var(--text-muted)">Please wait…</div>
+      </div>
+
+    </div>
+    <div class="modal-footer" id="exportModalFooter">
+      <button class="btn btn-ghost" onclick="closeModal('exportModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="runExport()" id="exportRunBtn">
+        <svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
+// ═══════════════════════════════════════════
+// ROLE AVATARS (global)
+// ═══════════════════════════════════════════
+var ROLE_AVATARS = {
+  superadmin: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+CiAgPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMxMjI0NDAiLz4KICA8Y2lyY2xlIGN4PSIyMCIgY3k9IjE1IiByPSI2IiBmaWxsPSIjRDQ4MzJBIiBvcGFjaXR5PSIwLjkiLz4KICA8cGF0aCBkPSJNOCAzMiBROCAyNCAyMCAyNCBRMzIgMjQgMzIgMzIiIGZpbGw9IiNENDgzMkEiIG9wYWNpdHk9IjAuOSIvPgogIDxwYXRoIGQ9Ik0xMiAxMyBMMTQgOCBMMTcgMTEgTDIwIDYgTDIzIDExIEwyNiA4IEwyOCAxMyIgc3Ryb2tlPSIjRjRDODQyIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPHBvbHlnb24gcG9pbnRzPSIyMCw3IDIxLjIsMTAuNSAyNSwxMC41IDIyLDEyLjUgMjMuMiwxNiAyMCwxNCAxNi44LDE2IDE4LDEyLjUgMTUsMTAuNSAxOC44LDEwLjUiIGZpbGw9IiNGNEM4NDIiIG9wYWNpdHk9IjAuOSIvPgo8L3N2Zz4=',
+  admin:      'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+CiAgPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMxRTNBNUYiLz4KICA8Y2lyY2xlIGN4PSIyMCIgY3k9IjE1IiByPSI2IiBmaWxsPSIjN0E5QkI1IiBvcGFjaXR5PSIwLjkiLz4KICA8cGF0aCBkPSJNOCAzMiBROCAyNCAyMCAyNCBRMzIgMjQgMzIgMzIiIGZpbGw9IiM3QTlCQjUiIG9wYWNpdHk9IjAuOSIvPgogIDxwYXRoIGQ9Ik0yMCA4IEwyNiAxMSBMMjYgMTcgUTI2IDIyIDIwIDI1IFExNCAyMiAxNCAxNyBMMTQgMTEgWiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjQThDM0Q4IiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxwb2x5bGluZSBwb2ludHM9IjE3LDE3IDE5LDE5IDIzLDE1IiBzdHJva2U9IiNBOEMzRDgiIHN0cm9rZS13aWR0aD0iMS41IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+',
+  worker:     'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+CiAgPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNDMDU1MkEiLz4KICA8Y2lyY2xlIGN4PSIyMCIgY3k9IjE1IiByPSI2IiBmaWxsPSIjRjhENUMwIiBvcGFjaXR5PSIwLjkiLz4KICA8cGF0aCBkPSJNOCAzMiBROCAyNCAyMCAyNCBRMzIgMjQgMzIgMzIiIGZpbGw9IiNGOEQ1QzAiIG9wYWNpdHk9IjAuOSIvPgogIDxwYXRoIGQ9Ik0yMCA5IFEyNSA5IDI1IDE0IFEyNSAxOSAyMCAxOSBRMjAgMTkgMjAgMTQiIGZpbGw9IiNGNEEyNjEiIG9wYWNpdHk9IjAuNyIvPgo8L3N2Zz4='
+};
 // ═══════════════════════════════════════════
 // CONFIG & STATE
 // ═══════════════════════════════════════════
@@ -922,13 +1036,8 @@ window.addEventListener('DOMContentLoaded', function() {
   // Set UI
   document.getElementById('userNameDisplay').textContent = USER.fullName || USER.username;
   document.getElementById('userRoleDisplay').textContent = USER.role === 'superadmin' ? 'Super Admin' : 'Admin';
-  var avatarMap = {
-    superadmin: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+CiAgPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMxMjI0NDAiLz4KICA8Y2lyY2xlIGN4PSIyMCIgY3k9IjE1IiByPSI2IiBmaWxsPSIjRDQ4MzJBIiBvcGFjaXR5PSIwLjkiLz4KICA8cGF0aCBkPSJNOCAzMiBROCAyNCAyMCAyNCBRMzIgMjQgMzIgMzIiIGZpbGw9IiNENDgzMkEiIG9wYWNpdHk9IjAuOSIvPgogIDxwYXRoIGQ9Ik0xMiAxMyBMMTQgOCBMMTcgMTEgTDIwIDYgTDIzIDExIEwyNiA4IEwyOCAxMyIgc3Ryb2tlPSIjRjRDODQyIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPHBvbHlnb24gcG9pbnRzPSIyMCw3IDIxLjIsMTAuNSAyNSwxMC41IDIyLDEyLjUgMjMuMiwxNiAyMCwxNCAxNi44LDE2IDE4LDEyLjUgMTUsMTAuNSAxOC44LDEwLjUiIGZpbGw9IiNGNEM4NDIiIG9wYWNpdHk9IjAuOSIvPgo8L3N2Zz4=',
-    admin:      'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+CiAgPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMxRTNBNUYiLz4KICA8Y2lyY2xlIGN4PSIyMCIgY3k9IjE1IiByPSI2IiBmaWxsPSIjN0E5QkI1IiBvcGFjaXR5PSIwLjkiLz4KICA8cGF0aCBkPSJNOCAzMiBROCAyNCAyMCAyNCBRMzIgMjQgMzIgMzIiIGZpbGw9IiM3QTlCQjUiIG9wYWNpdHk9IjAuOSIvPgogIDxwYXRoIGQ9Ik0yMCA4IEwyNiAxMSBMMjYgMTcgUTI2IDIyIDIwIDI1IFExNCAyMiAxNCAxNyBMMTQgMTEgWiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjQThDM0Q4IiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxwb2x5bGluZSBwb2ludHM9IjE3LDE3IDE5LDE5IDIzLDE1IiBzdHJva2U9IiNBOEMzRDgiIHN0cm9rZS13aWR0aD0iMS41IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+',
-    worker:     'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MCA0MCI+CiAgPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNDMDU1MkEiLz4KICA8Y2lyY2xlIGN4PSIyMCIgY3k9IjE1IiByPSI2IiBmaWxsPSIjRjhENUMwIiBvcGFjaXR5PSIwLjkiLz4KICA8cGF0aCBkPSJNOCAzMiBROCAyNCAyMCAyNCBRMzIgMjQgMzIgMzIiIGZpbGw9IiNGOEQ1QzAiIG9wYWNpdHk9IjAuOSIvPgogIDxwYXRoIGQ9Ik0yMCA5IFEyNSA5IDI1IDE0IFEyNSAxOSAyMCAxOSBRMjAgMTkgMjAgMTQiIGZpbGw9IiNGNEEyNjEiIG9wYWNpdHk9IjAuNyIvPgo8L3N2Zz4='
-  };
-  var avatarEl = document.getElementById('userAvatar');
-  avatarEl.innerHTML = '<img src="' + (avatarMap[USER.role] || avatarMap['worker']) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover" />';
+
+  document.getElementById("userAvatar").innerHTML = '<img src="'+ROLE_AVATARS[USER.role||"worker"]+'" style="width:100%;height:100%;border-radius:50%;object-fit:cover">';
   document.getElementById('sidebarRole').textContent = USER.role === 'superadmin' ? 'Super Admin' : 'Admin';
 
   // Hide superadmin option for regular admins
@@ -964,10 +1073,14 @@ function api(action, data, cb) {
   fetch(API, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
+    redirect: 'follow'
   })
-  .then(function(r) { return r.json(); })
-  .then(cb)
+  .then(function(r) { return r.text(); })
+  .then(function(text) {
+    try { return cb(JSON.parse(text)); }
+    catch(e) { showToast('Response error: ' + text.substring(0,100), 'error'); }
+  })
   .catch(function(e) { showToast('Connection error: ' + e.message, 'error'); });
 }
 
@@ -1095,7 +1208,7 @@ function renderAccounts() {
     var isSuper = a.Role === 'superadmin';
     var canDeact = !isSelf && !isSuper && a.Status === 'Active';
     return '<tr>' +
-      '<td><div style="display:flex;align-items:center;gap:9px"><img src="' + (roleAvatarMap[a.Role]||roleAvatarMap['worker']) + '" style="width:30px;height:30px;border-radius:50%;flex-shrink:0" /><strong>' + esc(a.FullName) + '</strong></div></td>' +
+      '<td><div style="display:flex;align-items:center;gap:9px"><img src="' + (ROLE_AVATARS[a.Role]||ROLE_AVATARS['worker']) + '" style="width:30px;height:30px;border-radius:50%;flex-shrink:0" /><strong>' + esc(a.FullName) + '</strong></div></td>' +
       '<td style="color:var(--text-muted)">' + esc(a.Username) + '</td>' +
       '<td><span class="badge badge-' + a.Role + '">' + a.Role + '</span></td>' +
       '<td>' + esc(a.Department || '—') + '</td>' +
@@ -1741,6 +1854,384 @@ function doLogout() {
   sessionStorage.removeItem('iic_api');
   window.location.href = 'login.html';
 }
+
+// ═══════════════════════════════════════════
+// EXPORT SYSTEM
+// ═══════════════════════════════════════════
+var EXPORT = {
+  type: 'beneficiaries',
+  format: 'excel',
+  filters: {}
+};
+
+function openExportModal() {
+  EXPORT.type = 'beneficiaries';
+  EXPORT.format = 'excel';
+  EXPORT.filters = {};
+  updateExportCards();
+  updateExportFilters();
+  document.getElementById('exportStep1').style.display = 'block';
+  document.getElementById('exportProgress').classList.remove('show');
+  document.getElementById('exportModalFooter').style.display = 'flex';
+  openModal('exportModal');
+}
+
+function selectExportType(type) {
+  EXPORT.type = type;
+  updateExportCards();
+  updateExportFilters();
+}
+
+function selectFormat(fmt) {
+  EXPORT.format = fmt;
+  ['excel','pdf'].forEach(function(f) {
+    var c = document.getElementById('fmtCard-' + f);
+    if (c) c.classList.toggle('selected', f === fmt);
+  });
+}
+
+function updateExportCards() {
+  ['beneficiaries','tasks','accounts','orgchart'].forEach(function(t) {
+    var c = document.getElementById('exportCard-' + t);
+    if (c) c.classList.toggle('selected', t === EXPORT.type);
+  });
+}
+
+function updateExportFilters() {
+  var container = document.getElementById('exportFilters');
+  var html = '';
+
+  if (EXPORT.type === 'beneficiaries') {
+    // Get unique program types from data
+    var programs = [...new Set(STATE.beneficiaries.map(function(b){ return b.ProgramType; }).filter(Boolean))];
+    var workers  = [...new Set(STATE.beneficiaries.map(function(b){ return b.AssignedWorkerName; }).filter(Boolean))];
+    html = '<div class="export-filter-row">' +
+      '<div class="form-group"><label class="form-label">Program Type</label>' +
+      '<select class="form-control" id="ef-program"><option value="">All Programs</option>' +
+      programs.map(function(p){ return '<option>' + esc(p) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Status</label>' +
+      '<select class="form-control" id="ef-status"><option value="">All Statuses</option>' +
+      '<option>Active</option><option>Completed</option><option>Transferred</option></select></div>' +
+      '</div>' +
+      '<div class="export-filter-row">' +
+      '<div class="form-group"><label class="form-label">Assigned Worker</label>' +
+      '<select class="form-control" id="ef-worker"><option value="">All Workers</option>' +
+      workers.map(function(w){ return '<option>' + esc(w) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Date From</label>' +
+      '<input type="date" class="form-control" id="ef-datefrom" /></div>' +
+      '</div>';
+
+  } else if (EXPORT.type === 'tasks') {
+    html = '<div class="export-filter-row">' +
+      '<div class="form-group"><label class="form-label">Status</label>' +
+      '<select class="form-control" id="ef-taskstatus"><option value="">All Statuses</option>' +
+      '<option>Open</option><option>Closed</option><option>Overdue</option></select></div>' +
+      '<div class="form-group"><label class="form-label">Priority</label>' +
+      '<select class="form-control" id="ef-priority"><option value="">All Priorities</option>' +
+      '<option>Normal</option><option>Urgent</option></select></div>' +
+      '</div>' +
+      '<div class="export-filter-row">' +
+      '<div class="form-group"><label class="form-label">Deadline From</label>' +
+      '<input type="date" class="form-control" id="ef-deadlinefrom" /></div>' +
+      '<div class="form-group"><label class="form-label">Deadline To</label>' +
+      '<input type="date" class="form-control" id="ef-deadlineto" /></div>' +
+      '</div>';
+
+  } else if (EXPORT.type === 'accounts') {
+    html = '<div class="export-filter-row">' +
+      '<div class="form-group"><label class="form-label">Role</label>' +
+      '<select class="form-control" id="ef-role"><option value="">All Roles</option>' +
+      '<option value="superadmin">Super Admin</option><option value="admin">Admin</option><option value="worker">Worker</option></select></div>' +
+      '<div class="form-group"><label class="form-label">Status</label>' +
+      '<select class="form-control" id="ef-accstatus"><option value="">All Statuses</option>' +
+      '<option>Active</option><option>Inactive</option></select></div>' +
+      '</div>';
+
+  } else if (EXPORT.type === 'orgchart') {
+    html = '<div class="form-group"><label class="form-label">Department</label>' +
+      '<select class="form-control" id="ef-dept"><option value="">All Departments</option>' +
+      [...new Set(STATE.orgchart.map(function(o){ return o.Department; }).filter(Boolean))].map(function(d){ return '<option>' + esc(d) + '</option>'; }).join('') +
+      '</select></div>';
+  }
+
+  container.innerHTML = html || '<div style="color:var(--text-muted);font-size:0.82rem">No filters available for this type.</div>';
+}
+
+function getFilteredData() {
+  var data = [];
+
+  if (EXPORT.type === 'beneficiaries') {
+    var prog   = (document.getElementById('ef-program')  || {}).value || '';
+    var status = (document.getElementById('ef-status')   || {}).value || '';
+    var worker = (document.getElementById('ef-worker')   || {}).value || '';
+    var dfrom  = (document.getElementById('ef-datefrom') || {}).value || '';
+    data = STATE.beneficiaries.filter(function(b) {
+      if (prog   && b.ProgramType         !== prog)   return false;
+      if (status && b.Status              !== status) return false;
+      if (worker && b.AssignedWorkerName  !== worker) return false;
+      if (dfrom  && b.DateRegistered && b.DateRegistered < dfrom) return false;
+      return true;
+    });
+
+  } else if (EXPORT.type === 'tasks') {
+    var ts  = (document.getElementById('ef-taskstatus')   || {}).value || '';
+    var pr  = (document.getElementById('ef-priority')     || {}).value || '';
+    var df  = (document.getElementById('ef-deadlinefrom') || {}).value || '';
+    var dt  = (document.getElementById('ef-deadlineto')   || {}).value || '';
+    data = STATE.tasks.filter(function(t) {
+      if (t.Status === 'Archived') return false;
+      if (ts && t.Status   !== ts) return false;
+      if (pr && t.Priority !== pr) return false;
+      if (df && t.Deadline && t.Deadline < df) return false;
+      if (dt && t.Deadline && t.Deadline > dt) return false;
+      return true;
+    });
+
+  } else if (EXPORT.type === 'accounts') {
+    var rl  = (document.getElementById('ef-role')      || {}).value || '';
+    var ast = (document.getElementById('ef-accstatus') || {}).value || '';
+    data = STATE.accounts.filter(function(a) {
+      if (rl  && a.Role   !== rl)  return false;
+      if (ast && a.Status !== ast) return false;
+      return true;
+    });
+
+  } else if (EXPORT.type === 'orgchart') {
+    var dept = (document.getElementById('ef-dept') || {}).value || '';
+    data = STATE.orgchart.filter(function(o) {
+      if (dept && o.Department !== dept) return false;
+      return true;
+    });
+  }
+
+  return data;
+}
+
+function runExport() {
+  var data = getFilteredData();
+  if (!data || data.length === 0) {
+    showToast('No data found for the selected filters.', 'error');
+    return;
+  }
+
+  // Show progress
+  document.getElementById('exportStep1').style.display = 'none';
+  document.getElementById('exportModalFooter').style.display = 'none';
+  document.getElementById('exportProgress').classList.add('show');
+
+  var msgEl = document.getElementById('exportProgressMsg');
+  msgEl.textContent = 'Preparing ' + data.length + ' records…';
+
+  setTimeout(function() {
+    try {
+      if (EXPORT.format === 'excel') {
+        exportToExcel(data);
+      } else {
+        exportToPDF(data);
+      }
+      closeModal('exportModal');
+      showToast('Export downloaded successfully!', 'success');
+    } catch(e) {
+      showToast('Export failed: ' + e.message, 'error');
+      document.getElementById('exportStep1').style.display = 'block';
+      document.getElementById('exportModalFooter').style.display = 'flex';
+      document.getElementById('exportProgress').classList.remove('show');
+    }
+  }, 400);
+}
+
+// ── EXCEL EXPORT ──
+function exportToExcel(data) {
+  var wb = XLSX.utils.book_new();
+  var timestamp = new Date().toLocaleDateString('en-PH');
+  var orgName   = 'Ina-Inakay Center Inc.';
+
+  if (EXPORT.type === 'beneficiaries') {
+    var rows = [
+      [orgName],
+      ['Beneficiary Records — Exported: ' + timestamp],
+      [],
+      ['ID','Full Name','Age','Gender','Address','Contact','Program','Assigned Worker','Status','Date Registered','Notes','Duplicate Flag']
+    ];
+    data.forEach(function(b) {
+      rows.push([
+        b.BeneficiaryID, b.FullName, b.Age, b.Gender, b.Address,
+        b.ContactNumber, b.ProgramType, b.AssignedWorkerName,
+        b.Status, b.DateRegistered, b.Notes,
+        b.DuplicateFlag === 'TRUE' ? 'Yes' : 'No'
+      ]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    styleExcelSheet(ws, rows[3].length);
+    XLSX.utils.book_append_sheet(wb, ws, 'Beneficiaries');
+
+  } else if (EXPORT.type === 'tasks') {
+    var rows = [
+      [orgName],
+      ['Task Report — Exported: ' + timestamp],
+      [],
+      ['Task ID','Title','Description','Priority','Status','Deadline','Created By','Created At','Assigned Workers','Worker Statuses']
+    ];
+    data.forEach(function(t) {
+      var workers  = (t.assignments||[]).map(function(a){ return a.workerName; }).join(', ');
+      var statuses = (t.assignments||[]).map(function(a){ return a.workerName + ': ' + a.status; }).join(' | ');
+      rows.push([
+        t.TaskID, t.Title, t.Description, t.Priority,
+        t.Status, t.Deadline, t.CreatedBy, t.CreatedAt,
+        workers, statuses
+      ]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    styleExcelSheet(ws, rows[3].length);
+    XLSX.utils.book_append_sheet(wb, ws, 'Tasks');
+
+  } else if (EXPORT.type === 'accounts') {
+    var rows = [
+      [orgName],
+      ['Staff Accounts — Exported: ' + timestamp],
+      [],
+      ['Account ID','Full Name','Username','Role','Position','Department','Email','Contact','Date Hired','Status','Tags']
+    ];
+    data.forEach(function(a) {
+      rows.push([
+        a.AccountID, a.FullName, a.Username, a.Role,
+        a.Position, a.Department, a.Email,
+        a.ContactNumber, a.DateHired, a.Status, a.Tags
+      ]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    styleExcelSheet(ws, rows[3].length);
+    XLSX.utils.book_append_sheet(wb, ws, 'Accounts');
+
+  } else if (EXPORT.type === 'orgchart') {
+    var rows = [
+      [orgName],
+      ['Org Chart — Exported: ' + timestamp],
+      [],
+      ['Org ID','Full Name','Position','Department','Level','Supervisor Org ID','Display Order','Status']
+    ];
+    data.forEach(function(o) {
+      rows.push([
+        o.OrgID, o.FullName || 'To Be Assigned', o.Position,
+        o.Department, o.Level, o.SupervisorOrgID,
+        o.DisplayOrder, o.Status
+      ]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    styleExcelSheet(ws, rows[3].length);
+    XLSX.utils.book_append_sheet(wb, ws, 'OrgChart');
+  }
+
+  // Set column widths
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  if (ws['!cols']) {} else {
+    ws['!cols'] = Array(20).fill({ wch: 20 });
+  }
+
+  var filename = 'IIC_' + EXPORT.type + '_' + new Date().toISOString().slice(0,10) + '.xlsx';
+  XLSX.writeFile(wb, filename);
+}
+
+function styleExcelSheet(ws, colCount) {
+  // Title rows styling via merge
+  ws['!merges'] = [
+    { s:{r:0,c:0}, e:{r:0,c:colCount-1} },
+    { s:{r:1,c:0}, e:{r:1,c:colCount-1} }
+  ];
+  // Column widths
+  ws['!cols'] = Array(colCount).fill(null).map(function(){ return { wch: 22 }; });
+}
+
+// ── PDF EXPORT ──
+function exportToPDF(data) {
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  var timestamp = new Date().toLocaleDateString('en-PH');
+  var titleMap = {
+    beneficiaries: 'Beneficiary Records',
+    tasks: 'Task Report',
+    accounts: 'Staff Accounts',
+    orgchart: 'Organizational Chart Data'
+  };
+
+  // Header
+  doc.setFillColor(18, 36, 64); // navy-dark
+  doc.rect(0, 0, 297, 22, 'F');
+  doc.setTextColor(248, 244, 238);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Ina-Inakay Center Inc.  —  ' + titleMap[EXPORT.type], 14, 10);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Exported: ' + timestamp + '  |  Records: ' + data.length, 14, 17);
+
+  // Accent bar
+  doc.setFillColor(192, 85, 42); // terra
+  doc.rect(0, 22, 100, 2, 'F');
+  doc.setFillColor(212, 131, 42); // amber
+  doc.rect(100, 22, 100, 2, 'F');
+  doc.setFillColor(122, 155, 181); // steel
+  doc.rect(200, 22, 97, 2, 'F');
+
+  var head = [];
+  var body = [];
+
+  if (EXPORT.type === 'beneficiaries') {
+    head = [['ID','Full Name','Age','Gender','Program Type','Assigned Worker','Status','Date Registered']];
+    body = data.map(function(b) {
+      return [b.BeneficiaryID, b.FullName, b.Age||'—', b.Gender||'—', b.ProgramType||'—', b.AssignedWorkerName||'—', b.Status, b.DateRegistered||'—'];
+    });
+  } else if (EXPORT.type === 'tasks') {
+    head = [['Task ID','Title','Priority','Status','Deadline','Assigned Workers']];
+    body = data.map(function(t) {
+      var workers = (t.assignments||[]).map(function(a){ return a.workerName + ' ['+a.status+']'; }).join(', ');
+      return [t.TaskID, t.Title, t.Priority, t.Status, t.Deadline||'—', workers||'—'];
+    });
+  } else if (EXPORT.type === 'accounts') {
+    head = [['Account ID','Full Name','Username','Role','Position','Department','Status']];
+    body = data.map(function(a) {
+      return [a.AccountID, a.FullName, a.Username, a.Role, a.Position||'—', a.Department||'—', a.Status];
+    });
+  } else if (EXPORT.type === 'orgchart') {
+    head = [['Org ID','Full Name','Position','Department','Level','Status']];
+    body = data.map(function(o) {
+      return [o.OrgID, o.FullName||'To Be Assigned', o.Position||'—', o.Department||'—', o.Level||1, o.Status];
+    });
+  }
+
+  doc.autoTable({
+    head: head,
+    body: body,
+    startY: 28,
+    styles: {
+      font: 'helvetica', fontSize: 8,
+      cellPadding: 3, overflow: 'linebreak',
+      textColor: [26, 26, 46]
+    },
+    headStyles: {
+      fillColor: [30, 58, 95],
+      textColor: [248, 244, 238],
+      fontStyle: 'bold', fontSize: 8
+    },
+    alternateRowStyles: { fillColor: [248, 244, 238] },
+    columnStyles: { 0: { cellWidth: 28 } },
+    margin: { left: 14, right: 14 },
+    didDrawPage: function(data) {
+      // Footer on each page
+      doc.setFontSize(7);
+      doc.setTextColor(107, 114, 128);
+      doc.text(
+        'Ina-Inakay Center Inc.  |  Page ' + data.pageNumber + '  |  Confidential',
+        14, doc.internal.pageSize.height - 6
+      );
+    }
+  });
+
+  var filename = 'IIC_' + EXPORT.type + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+  doc.save(filename);
+}
+
 </script>
 </body>
 </html>
