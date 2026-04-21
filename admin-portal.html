@@ -802,7 +802,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('taskModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveTask()">Create Task</button>
+      <button class="btn btn-primary" id="taskCreateBtn" onclick="saveTask()">Create Task</button>
     </div>
   </div>
 </div>
@@ -1069,6 +1069,7 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 
 function loadAll() {
+  showToast('Loading portal data...', '');
   loadAccounts();
   loadTasks();
   loadAnnouncements();
@@ -1200,8 +1201,10 @@ function markAllRead() {
 // ACCOUNTS
 // ═══════════════════════════════════════════
 function loadAccounts() {
+  var tbody = document.getElementById('accountsTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6"><div class="loading"><span class="spinner-sm"></span> Loading accounts…</div></td></tr>';
   api('getAccounts', {}, function(d) {
-    if (!d.success) return;
+    if (!d.success) { showToast('Failed to load accounts: ' + (d.message||'Unknown error'), 'error'); return; }
     STATE.accounts = d.data || [];
     renderAccounts();
     updateDashboardStats();
@@ -1316,25 +1319,29 @@ function saveAccount() {
   };
   if (password) payload.password = password;
 
+  setBtnLoading('accountModalSaveBtn', true, STATE.editAccountID ? 'Saving...' : 'Creating...');
   if (STATE.editAccountID) {
     payload.accountID = STATE.editAccountID;
     api('updateAccount', payload, function(d) {
-      if (d.success) { closeModal('accountModal'); showToast('Account updated.', 'success'); loadAccounts(); }
-      else showAlert('accountModalError', d.message);
+      setBtnLoading('accountModalSaveBtn', false, 'Save Changes');
+      if (d.success) { closeModal('accountModal'); showToast('Account updated successfully.', 'success'); loadAccounts(); }
+      else showAlert('accountModalError', 'accountModalErrorText', d.message || 'Update failed.');
     });
   } else {
     api('createAccount', payload, function(d) {
-      if (d.success) { closeModal('accountModal'); showToast('Account created.', 'success'); loadAccounts(); }
-      else showAlert('accountModalError', d.message);
+      setBtnLoading('accountModalSaveBtn', false, 'Create Account');
+      if (d.success) { closeModal('accountModal'); showToast('Account created successfully.', 'success'); loadAccounts(); }
+      else showAlert('accountModalError', 'accountModalErrorText', d.message || 'Creation failed.');
     });
   }
 }
 
 function deactivateAccount(id, name) {
   if (!confirm('Deactivate ' + name + '? Their incomplete tasks will be flagged for reassignment.')) return;
+  showToast('Deactivating account...', '');
   api('deactivateAccount', { accountID: id, requestedBy: USER.accountID }, function(d) {
-    showToast(d.success ? 'Account deactivated.' : d.message, d.success ? 'success' : 'error');
-    if (d.success) loadAccounts();
+    if (d.success) { showToast('Account deactivated.', 'success'); loadAccounts(); }
+    else showToast(d.message || 'Deactivation failed.', 'error');
   });
 }
 
@@ -1349,11 +1356,14 @@ function activateAccount(id) {
 // TASKS
 // ═══════════════════════════════════════════
 function loadTasks() {
+  var tbody = document.getElementById('tasksTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7"><div class="loading"><span class="spinner-sm"></span> Loading tasks…</div></td></tr>';
   api('getTasks', { requesterID: USER.accountID, requesterRole: USER.role }, function(d) {
-    if (!d.success) return;
+    if (!d.success) { showToast('Failed to load tasks: ' + (d.message||'Unknown error'), 'error'); return; }
     STATE.tasks = d.data || [];
     renderTasks();
     updateDashboardStats();
+    if (STATE.tasks.length > 0) showToast('Loaded ' + STATE.tasks.length + ' task(s).', 'success');
   });
 }
 
@@ -1414,17 +1424,20 @@ function saveTask() {
   var deadline = document.getElementById('task-deadline').value;
   var sel      = document.getElementById('task-workers');
   var workers  = Array.from(sel.selectedOptions).map(function(o){ return o.value; });
-  if (!title) { showAlert('taskModalError', 'Task title is required.'); return; }
-  if (!deadline) { showAlert('taskModalError', 'Deadline is required.'); return; }
-  if (workers.length === 0) { showAlert('taskModalError', 'Please assign at least one worker.'); return; }
+  if (!title)            { showAlert('taskModalError', 'taskModalErrorText', 'Task title is required.'); return; }
+  if (!deadline)         { showAlert('taskModalError', 'taskModalErrorText', 'Deadline is required.'); return; }
+  if (workers.length===0){ showAlert('taskModalError', 'taskModalErrorText', 'Please assign at least one worker.'); return; }
+
+  setBtnLoading('taskCreateBtn', true, 'Creating Task...');
   api('createTask', {
     createdBy: USER.accountID, title: title,
     description: document.getElementById('task-description').value.trim(),
     deadline: deadline, priority: document.getElementById('task-priority').value,
     assignedWorkerIDs: workers
   }, function(d) {
+    setBtnLoading('taskCreateBtn', false, 'Create Task');
     if (d.success) { closeModal('taskModal'); showToast('Task created and workers notified.', 'success'); loadTasks(); }
-    else showAlert('taskModalError', d.message);
+    else showAlert('taskModalError', 'taskModalErrorText', d.message || 'Something went wrong.');
   });
 }
 
@@ -1453,9 +1466,14 @@ function viewTask(id) {
 
 function deleteTask(id) {
   if (!confirm('Archive this task? It will be hidden but data is preserved.')) return;
+  showToast('Archiving task...', '');
   api('deleteTask', { taskID: id, requestedBy: USER.accountID }, function(d) {
-    showToast(d.success?'Task archived.':d.message, d.success?'success':'error');
-    if (d.success) loadTasks();
+    if (d.success) {
+      showToast('Task archived successfully.', 'success');
+      loadTasks();
+    } else {
+      showToast(d.message || 'Archive failed. Please try again.', 'error');
+    }
   });
 }
 
@@ -1558,8 +1576,10 @@ function deleteAnnouncement(id) {
 // BENEFICIARIES
 // ═══════════════════════════════════════════
 function loadBeneficiaries() {
+  var tbody = document.getElementById('beneficiariesTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7"><div class="loading"><span class="spinner-sm"></span> Loading beneficiaries…</div></td></tr>';
   api('getBeneficiaries', { requesterID: USER.accountID, requesterRole: USER.role }, function(d) {
-    if (!d.success) return;
+    if (!d.success) { showToast('Failed to load beneficiaries: ' + (d.message||'Unknown error'), 'error'); return; }
     STATE.beneficiaries = d.data || [];
     renderBeneficiaries();
     updateDashboardStats();
@@ -1700,6 +1720,8 @@ function editOrgEntry(id) {
 function saveOrgEntry() {
   var position = document.getElementById('org-position').value.trim();
   if (!position) { showToast('Position is required.','error'); return; }
+  var orgBtn = document.querySelector('#orgModal .btn-primary');
+  if (orgBtn) { orgBtn.disabled=true; orgBtn.textContent='Saving...'; }
   api('saveOrgEntry', {
     orgID: document.getElementById('org-id').value||null,
     fullName: document.getElementById('org-name').value.trim(),
@@ -1711,8 +1733,9 @@ function saveOrgEntry() {
     displayOrder: parseInt(document.getElementById('org-order').value)||0,
     savedBy: USER.accountID
   }, function(d) {
-    showToast(d.success?'Saved.':d.message, d.success?'success':'error');
-    if (d.success) { closeModal('orgModal'); loadOrgChart(); }
+    if (orgBtn) { orgBtn.disabled=false; orgBtn.textContent='Save'; }
+    if (d.success) { closeModal('orgModal'); showToast('Org entry saved.', 'success'); loadOrgChart(); }
+    else showToast(d.message || 'Save failed.', 'error');
   });
 }
 
@@ -1859,6 +1882,32 @@ function renderDashboard() {
 // ═══════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════
+
+// Generic button loading state
+function setBtnLoading(btnId, loading, label) {
+  var btn = document.getElementById(btnId);
+  if (!btn) return;
+  if (loading) {
+    btn.disabled = true;
+    btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.4);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;margin-right:6px"></span>' + label;
+  } else {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+// Show inline alert inside modals
+function showAlert(elId, textElId, msg) {
+  var el = document.getElementById(elId);
+  var tx = document.getElementById(textElId);
+  if (tx) tx.textContent = msg;
+  if (el) el.classList.add('show');
+}
+function hideAlert(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.remove('show');
+}
+
 function esc(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
