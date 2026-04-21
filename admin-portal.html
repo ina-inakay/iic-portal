@@ -441,7 +441,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     </div>
 
     <div class="nav-section">Management</div>
-    <div class="nav-item" onclick="showPanel('accounts')" data-panel="accounts">
+    <div class="nav-item" onclick="showPanel('accounts')" data-panel="accounts" id="accountsNavItem">
       <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       Accounts
     </div>
@@ -911,6 +911,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     <div class="modal-body" id="taskDetailBody"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('taskDetailModal')">Close</button>
+      <button class="btn btn-primary" id="taskDetailUpdateBtn" style="display:none">Update My Progress</button>
     </div>
   </div>
 </div>
@@ -929,6 +930,38 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   </div>
 </div>
 
+
+
+<!-- ═══ RESET PASSWORD MODAL ═══ -->
+<div class="modal-overlay" id="resetPwModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">Reset Password</div>
+      <button class="modal-close" onclick="closeModal('resetPwModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rpw-accountID" />
+      <div class="alert alert-error" id="rpwError"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span id="rpwErrorText"></span></div>
+      <div class="alert alert-success" id="rpwSuccess"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span id="rpwSuccessText"></span></div>
+      <div style="background:var(--navy-light);padding:12px;border-radius:var(--radius);margin-bottom:16px;font-size:0.83rem;color:var(--navy-mid)">
+        Setting a new password for: <strong id="rpw-name"></strong><br>
+        <span style="font-size:0.75rem;color:var(--text-muted)">The worker will be able to change it again from their profile.</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">New Password *</label>
+        <input type="password" class="form-control" id="rpw-new" placeholder="Min. 6 characters" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirm New Password *</label>
+        <input type="password" class="form-control" id="rpw-confirm" placeholder="Repeat new password" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('resetPwModal')">Cancel</button>
+      <button class="btn btn-primary" id="rpwSaveBtn" onclick="saveForceReset()">Set New Password</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ EXPORT MODAL ═══ -->
 <div class="modal-overlay" id="exportModal">
@@ -1049,6 +1082,17 @@ window.addEventListener('DOMContentLoaded', function() {
 
   document.getElementById("userAvatar").innerHTML = '<img src="'+ROLE_AVATARS[USER.role||"worker"]+'" style="width:100%;height:100%;border-radius:50%;object-fit:cover">';
   document.getElementById('sidebarRole').textContent = USER.role === 'superadmin' ? 'Super Admin' : 'Admin';
+
+  // Hide Accounts section for regular admins
+  if (USER.role !== 'superadmin') {
+    var accNav = document.getElementById('accountsNavItem');
+    if (accNav) {
+      accNav.style.display = 'none';
+      // Also hide the Management section label if no other items under it
+    }
+    // Redirect to dashboard if admin tries to access accounts panel directly
+    if (window.location.hash === '#accounts') showPanel('dashboard');
+  }
 
   // Restrict role options based on current user role
   if (USER.role !== 'superadmin') {
@@ -1232,6 +1276,7 @@ function renderAccounts() {
       '<td><span class="badge badge-' + (a.Status==='Active'?'active':'inactive') + '">' + a.Status + '</span></td>' +
       '<td><div class="td-actions">' +
         '<button class="btn btn-ghost btn-sm" onclick="editAccount(\'' + a.AccountID + '\')">Edit</button>' +
+        (!isSelf ? '<button class="btn btn-ghost btn-sm" style="color:var(--amber)" onclick="openResetPwModal(\'' + a.AccountID + '\',\'' + esc(a.FullName) + '\')">Reset PW</button>' : '') +
         (canDeact ? '<button class="btn btn-danger btn-sm" onclick="deactivateAccount(\'' + a.AccountID + '\',\'' + esc(a.FullName) + '\')">Deactivate</button>' : '') +
         (a.Status === 'Inactive' && !isSuper ? '<button class="btn btn-amber btn-sm" onclick="activateAccount(\'' + a.AccountID + '\')">Activate</button>' : '') +
       '</div></td></tr>';
@@ -1388,7 +1433,7 @@ function renderTasks() {
       '<td>' + (workers||'<span style="color:var(--text-muted)">—</span>') + '</td>' +
       '<td><div class="td-actions">' +
         '<button class="btn btn-ghost btn-sm" onclick="viewTask(\'' + t.TaskID + '\')">View</button>' +
-        (t.Status !== 'Closed' ? '<button class="btn btn-danger btn-sm" onclick="deleteTask(\'' + t.TaskID + '\')">Archive</button>' : '') +
+        (t.Status !== 'Archived' ? '<button class="btn btn-danger btn-sm" onclick="deleteTask(\'' + t.TaskID + '\')">Archive</button>' : '') +
       '</div></td></tr>';
   }).join('');
 
@@ -1461,19 +1506,26 @@ function viewTask(id) {
   });
   document.getElementById('taskDetailTitle').textContent = 'Task: ' + t.TaskID;
   document.getElementById('taskDetailBody').innerHTML = html;
+
+  // Check if current user is assigned to this task
+  var myAssignment = (t.assignments||[]).find(function(a){ return a.workerID === USER.accountID; });
+  var updateBtn = document.getElementById('taskDetailUpdateBtn');
+  if (myAssignment && myAssignment.status !== 'Done') {
+    if (updateBtn) {
+      updateBtn.style.display = 'inline-flex';
+      updateBtn.onclick = function() { closeModal('taskDetailModal'); openMyTaskUpdateModal(t.TaskID, myAssignment); };
+    }
+  } else {
+    if (updateBtn) updateBtn.style.display = 'none';
+  }
   openModal('taskDetailModal');
 }
 
 function deleteTask(id) {
-  if (!confirm('Archive this task? It will be hidden but data is preserved.')) return;
   showToast('Archiving task...', '');
   api('deleteTask', { taskID: id, requestedBy: USER.accountID }, function(d) {
-    if (d.success) {
-      showToast('Task archived successfully.', 'success');
-      loadTasks();
-    } else {
-      showToast(d.message || 'Archive failed. Please try again.', 'error');
-    }
+    if (d.success) { showToast('Task archived successfully.', 'success'); loadTasks(); }
+    else showToast(d.message || 'Archive failed. Please try again.', 'error');
   });
 }
 
@@ -1565,10 +1617,10 @@ function saveAnnouncement() {
 }
 
 function deleteAnnouncement(id) {
-  if (!confirm('Archive this announcement?')) return;
+  showToast('Archiving announcement...', '');
   api('deleteAnnouncement', { annID: id, requestedBy: USER.accountID }, function(d) {
-    showToast(d.success?'Archived.':d.message, d.success?'success':'error');
-    if (d.success) loadAnnouncements();
+    if (d.success) { showToast('Announcement archived.', 'success'); loadAnnouncements(); }
+    else showToast(d.message || 'Archive failed.', 'error');
   });
 }
 
@@ -1657,10 +1709,10 @@ function infoItem(label, value) {
 }
 
 function archiveBeneficiary(id) {
-  if (!confirm('Archive this beneficiary record?')) return;
+  showToast('Archiving beneficiary...', '');
   api('deleteBeneficiary', { benID: id, requestedBy: USER.accountID }, function(d) {
-    showToast(d.success?'Archived.':d.message, d.success?'success':'error');
-    if (d.success) { closeModal('benDetailModal'); loadBeneficiaries(); }
+    if (d.success) { closeModal('benDetailModal'); showToast('Beneficiary archived.', 'success'); loadBeneficiaries(); }
+    else showToast(d.message || 'Archive failed.', 'error');
   });
 }
 
@@ -1740,10 +1792,10 @@ function saveOrgEntry() {
 }
 
 function deleteOrgEntry(id) {
-  if (!confirm('Archive this org chart entry?')) return;
+  showToast('Archiving org entry...', '');
   api('deleteOrgEntry', { orgID: id, requestedBy: USER.accountID }, function(d) {
-    showToast(d.success?'Archived.':d.message, d.success?'success':'error');
-    if (d.success) loadOrgChart();
+    if (d.success) { showToast('Org entry archived.', 'success'); loadOrgChart(); }
+    else showToast(d.message || 'Archive failed.', 'error');
   });
 }
 
@@ -1922,7 +1974,6 @@ function showAlert(id, msg) {
 function hideAlert(id) { document.getElementById(id).classList.remove('show'); }
 
 function doLogout() {
-  if (!confirm('Sign out?')) return;
   sessionStorage.removeItem('iic_user');
   sessionStorage.removeItem('iic_api');
   window.location.href = 'login.html';
@@ -2303,6 +2354,113 @@ function exportToPDF(data) {
 
   var filename = 'IIC_' + EXPORT.type + '_' + new Date().toISOString().slice(0,10) + '.pdf';
   doc.save(filename);
+}
+
+// ═══════════════════════════════════════════
+// FORCE RESET PASSWORD (Admin/SuperAdmin)
+// ═══════════════════════════════════════════
+function openResetPwModal(accountID, fullName) {
+  document.getElementById('rpw-accountID').value = accountID;
+  document.getElementById('rpw-name').textContent = fullName;
+  document.getElementById('rpw-new').value = '';
+  document.getElementById('rpw-confirm').value = '';
+  hideAlert('rpwError');
+  hideAlert('rpwSuccess');
+  document.getElementById('rpwSaveBtn').disabled = false;
+  document.getElementById('rpwSaveBtn').textContent = 'Set New Password';
+  openModal('resetPwModal');
+}
+
+function saveForceReset() {
+  var accountID = document.getElementById('rpw-accountID').value;
+  var newPw     = document.getElementById('rpw-new').value;
+  var confirm   = document.getElementById('rpw-confirm').value;
+
+  hideAlert('rpwError');
+  hideAlert('rpwSuccess');
+
+  if (!newPw)          { showAlert('rpwError','rpwErrorText','New password is required.'); return; }
+  if (newPw.length < 6){ showAlert('rpwError','rpwErrorText','Password must be at least 6 characters.'); return; }
+  if (newPw !== confirm){ showAlert('rpwError','rpwErrorText','Passwords do not match.'); return; }
+
+  setBtnLoading('rpwSaveBtn', true, 'Saving...');
+
+  // Use updateAccount with new password field
+  api('forceResetPassword', {
+    accountID: accountID,
+    newPassword: newPw,
+    requestedBy: USER.accountID
+  }, function(d) {
+    setBtnLoading('rpwSaveBtn', false, 'Set New Password');
+    if (d.success) {
+      showAlert('rpwSuccess', 'rpwSuccessText', 'Password updated successfully! The worker can now log in with the new password.');
+      document.getElementById('rpw-new').value = '';
+      document.getElementById('rpw-confirm').value = '';
+    } else {
+      showAlert('rpwError', 'rpwErrorText', d.message || 'Failed to reset password. Please try again.');
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
+// ADMIN/SUPERADMIN TASK ASSIGNMENT UPDATE
+// ═══════════════════════════════════════════
+function openMyTaskUpdateModal(taskID, assignment) {
+  // Reuse the existing task detail modal but show update form
+  var t = STATE.tasks.find(function(x){ return x.TaskID === taskID; });
+  if (!t || !assignment) return;
+
+  // Build update form inside the detail modal
+  var html = '<div style="background:var(--cream);padding:12px;border-radius:8px;margin-bottom:14px">' +
+    '<strong>' + esc(t.Title) + '</strong><br>' +
+    '<span style="font-size:0.78rem;color:var(--text-muted)">Deadline: ' + esc(t.Deadline||'—') + ' • Your current status: <strong>' + esc(assignment.status) + '</strong></span>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Update Status</label>' +
+    '<select class="form-control" id="atm-status">' +
+    '<option value="Pending"' + (assignment.status==='Pending'?' selected':'') + '>Pending</option>' +
+    '<option value="In Progress"' + (assignment.status==='In Progress'?' selected':'') + '>In Progress</option>' +
+    '<option value="Done"' + (assignment.status==='Done'?' selected':'') + '>Done</option>' +
+    '</select></div>' +
+    '<div class="form-group"><label class="form-label">Remarks</label>' +
+    '<textarea class="form-control" id="atm-remarks" placeholder="Add your progress notes...">' + esc(assignment.remarks||'') + '</textarea></div>' +
+    '<div class="form-group"><label class="form-label">GDrive Link (optional)</label>' +
+    '<input class="form-control" id="atm-gdrive" value="' + esc(assignment.gDriveLink||'') + '" placeholder="https://drive.google.com/..." />' +
+    '<div class="form-hint">Set sharing to Anyone with the link</div></div>';
+
+  document.getElementById('taskDetailTitle').textContent = 'Update My Progress';
+  document.getElementById('taskDetailBody').innerHTML = html;
+
+  // Change footer button
+  var updateBtn = document.getElementById('taskDetailUpdateBtn');
+  if (updateBtn) {
+    updateBtn.textContent = 'Save My Update';
+    updateBtn.onclick = function() { saveMyTaskUpdate(assignment.assignmentID); };
+  }
+  openModal('taskDetailModal');
+}
+
+function saveMyTaskUpdate(assignmentID) {
+  var status  = document.getElementById('atm-status').value;
+  var remarks = document.getElementById('atm-remarks').value.trim();
+  var gdrive  = document.getElementById('atm-gdrive').value.trim();
+
+  var btn = document.getElementById('taskDetailUpdateBtn');
+  if (btn) { btn.disabled=true; btn.textContent='Saving...'; }
+
+  api('updateTaskAssignment', {
+    assignmentID: assignmentID,
+    workerID: USER.accountID,
+    status: status, remarks: remarks, gDriveLink: gdrive
+  }, function(d) {
+    if (btn) { btn.disabled=false; btn.textContent='Save My Update'; }
+    if (d.success) {
+      closeModal('taskDetailModal');
+      showToast('Progress updated successfully!', 'success');
+      loadTasks();
+    } else {
+      showToast(d.message || 'Update failed. Please try again.', 'error');
+    }
+  });
 }
 
 </script>
