@@ -559,10 +559,10 @@ function loadAll() {
 // ═══════════════════════════════════════════
 function api(action, data, cb) {
   data.action = action;
-  fetch(API, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(data) })
-  .then(function(r){ return r.json(); })
-  .then(cb)
-  .catch(function(e){ showToast('Connection error','error'); });
+  fetch(API, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(data), redirect:'follow' })
+  .then(function(r){ return r.text(); })
+  .then(function(t){ try{ return cb(JSON.parse(t)); } catch(e){ showToast('Response error','error'); } })
+  .catch(function(e){ showToast('Connection error: ' + e.message,'error'); });
 }
 
 // ═══════════════════════════════════════════
@@ -1049,9 +1049,9 @@ function showAlert(id, textId, msg) {
 function hideAlert(id) { var el=document.getElementById(id); if(el) el.classList.remove('show'); }
 
 function doLogout() {
-  if (!confirm('Sign out?')) return;
-  sessionStorage.removeItem('iic_user'); sessionStorage.removeItem('iic_api');
-  window.location.href='login.html';
+  sessionStorage.removeItem('iic_user');
+  sessionStorage.removeItem('iic_api');
+  window.location.href = 'login.html';
 }
 </script>
 </body>
