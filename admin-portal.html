@@ -903,7 +903,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 
 <!-- Task Detail Modal -->
 <div class="modal-overlay" id="taskDetailModal">
-  <div class="modal" style="max-width:600px">
+  <div class="modal" style="max-width:680px">
     <div class="modal-header">
       <div class="modal-title" id="taskDetailTitle">Task Details</div>
       <button class="modal-close" onclick="closeModal('taskDetailModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -1489,35 +1489,113 @@ function saveTask() {
 function viewTask(id) {
   var t = STATE.tasks.find(function(x){ return x.TaskID===id; });
   if (!t) return;
-  var html = '<div style="margin-bottom:16px"><strong style="font-size:1rem">' + esc(t.Title) + '</strong><br><span style="font-size:0.78rem;color:var(--text-muted)">' + esc(t.TaskID) + ' • ' + esc(t.Priority) + ' Priority • Deadline: ' + esc(t.Deadline) + '</span></div>';
-  if (t.Description) html += '<p style="font-size:0.85rem;margin-bottom:16px;color:var(--text-muted)">' + esc(t.Description) + '</p>';
-  html += '<div style="font-weight:600;font-size:0.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);margin-bottom:10px">Worker Progress</div>';
-  (t.assignments||[]).forEach(function(a) {
+
+  var html = '';
+
+  // Task header
+  html += '<div style="background:var(--navy-light);padding:14px;border-radius:10px;margin-bottom:16px">';
+  html += '<div style="font-size:1rem;font-weight:700;color:var(--navy-dark);margin-bottom:4px">' + esc(t.Title) + '</div>';
+  html += '<div style="font-size:0.78rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap">';
+  html += '<span>🔖 ' + esc(t.TaskID) + '</span>';
+  html += '<span>📅 Deadline: ' + esc(t.Deadline||'—') + '</span>';
+  html += '<span>⚡ ' + esc(t.Priority) + ' Priority</span>';
+  html += '<span>📌 Status: ' + esc(t.Status) + '</span>';
+  html += '</div>';
+  if (t.Description) html += '<div style="font-size:0.83rem;color:var(--text-muted);margin-top:8px;line-height:1.5">' + esc(t.Description) + '</div>';
+  html += '</div>';
+
+  // Each worker's submission
+  html += '<div style="font-weight:700;font-size:0.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);margin-bottom:12px">📋 Worker Submissions</div>';
+
+  var assignments = t.assignments || [];
+  if (assignments.length === 0) {
+    html += '<div style="color:var(--text-muted);font-size:0.83rem">No workers assigned.</div>';
+  }
+
+  assignments.forEach(function(a) {
     var pct = a.status==='Done'?100:a.status==='In Progress'?50:a.status==='Overdue'?100:0;
-    var color = a.status==='Done'?'var(--success)':a.status==='Overdue'?'var(--error)':'var(--navy)';
-    html += '<div style="margin-bottom:14px;padding:12px;background:var(--cream);border-radius:8px">' +
-      '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:0.85rem;font-weight:500">' + esc(a.workerName) + '</span>' +
-      '<span class="badge badge-' + (a.status==='Done'?'done':a.status==='Overdue'?'overdue':a.status==='In Progress'?'progress':'pending') + '">' + a.status + '</span></div>' +
-      '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
-      (a.remarks ? '<div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px">📝 ' + esc(a.remarks) + '</div>' : '') +
-      (a.fileURL || a.gDriveLink ? '<div style="font-size:0.78rem;margin-top:4px"><a href="' + esc(a.fileURL||a.gDriveLink) + '" target="_blank" style="color:var(--navy-mid)">📎 View Attachment</a></div>' : '') +
-      (a.completedAt ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Completed: ' + esc(a.completedAt) + '</div>' : '') +
-    '</div>';
+    var statusColor = a.status==='Done'?'var(--success)':a.status==='Overdue'?'var(--error)':a.status==='In Progress'?'var(--navy)':'var(--amber)';
+    var cardBorder = a.status==='Done'?'#22c55e':a.status==='Overdue'?'var(--terra)':a.status==='In Progress'?'var(--navy)':'var(--border)';
+
+    html += '<div style="border:1.5px solid ' + cardBorder + ';border-radius:10px;padding:14px;margin-bottom:12px">';
+
+    // Worker name + status
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+    html += '<div style="font-weight:600;font-size:0.88rem">' + esc(a.workerName) + '</div>';
+    html += '<span class="badge badge-' + (a.status==='Done'?'done':a.status==='Overdue'?'overdue':a.status==='In Progress'?'progress':'pending') + '">' + a.status + '</span>';
+    html += '</div>';
+
+    // Progress bar
+    html += '<div class="progress-bar" style="margin-bottom:10px"><div class="progress-fill" style="width:' + pct + '%;background:' + statusColor + '"></div></div>';
+
+    // Submission details
+    if (a.remarks) {
+      html += '<div style="background:var(--cream);padding:10px;border-radius:8px;margin-bottom:8px">';
+      html += '<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">📝 Progress Notes</div>';
+      html += '<div style="font-size:0.83rem;line-height:1.5">' + esc(a.remarks).replace(/
+/g,'<br>') + '</div>';
+      html += '</div>';
+    } else {
+      html += '<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic;margin-bottom:8px">No remarks submitted yet.</div>';
+    }
+
+    // Attachment
+    if (a.fileURL || a.gDriveLink) {
+      html += '<div style="margin-bottom:8px">';
+      html += '<a href="' + esc(a.fileURL||a.gDriveLink) + '" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:var(--navy-light);color:var(--navy-mid);padding:6px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;text-decoration:none">📎 View Submitted File / Link</a>';
+      html += '</div>';
+    }
+
+    // Completed timestamp
+    if (a.completedAt) {
+      html += '<div style="font-size:0.72rem;color:var(--success);margin-bottom:8px">✓ Completed: ' + esc(a.completedAt) + '</div>';
+    }
+    if (a.updatedAt) {
+      html += '<div style="font-size:0.7rem;color:var(--text-muted)">Last updated: ' + esc(a.updatedAt) + '</div>';
+    }
+
+    // Admin Feedback section
+    html += '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">';
+    html += '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin-bottom:6px">💬 Admin Feedback</div>';
+
+    // Show existing feedback if any (stored in a special prefix in remarks)
+    var feedbackMatch = a.adminFeedback || '';
+    if (feedbackMatch) {
+      html += '<div style="background:#FEF3E2;padding:8px 10px;border-radius:6px;font-size:0.8rem;margin-bottom:8px;border-left:3px solid var(--amber)">' + esc(feedbackMatch) + '</div>';
+    }
+
+    // Feedback input + action buttons
+    html += '<textarea id="feedback-' + a.assignmentID + '" class="form-control" placeholder="Write feedback for ' + esc(a.workerName) + '..." style="min-height:70px;font-size:0.83rem;margin-bottom:8px"></textarea>';
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+
+    // Only show Accept/Revise if worker has submitted something (In Progress or Done)
+    if (a.status === 'Done' || a.status === 'In Progress') {
+      html += '<button class="btn btn-success btn-sm" onclick="sendTaskFeedback('' + a.assignmentID + '','' + esc(a.workerName) + '','accept','' + t.TaskID + '')">✓ Accept</button>';
+      html += '<button class="btn btn-warn btn-sm" onclick="sendTaskFeedback('' + a.assignmentID + '','' + esc(a.workerName) + '','revise','' + t.TaskID + '')">↩ Request Revision</button>';
+    }
+    html += '<button class="btn btn-ghost btn-sm" onclick="sendTaskFeedback('' + a.assignmentID + '','' + esc(a.workerName) + '','note','' + t.TaskID + '')">💬 Send Note</button>';
+    html += '</div>';
+    html += '</div>'; // end feedback section
+
+    html += '</div>'; // end assignment card
   });
-  document.getElementById('taskDetailTitle').textContent = 'Task: ' + t.TaskID;
+
+  document.getElementById('taskDetailTitle').textContent = 'Review Task: ' + t.TaskID;
   document.getElementById('taskDetailBody').innerHTML = html;
 
-  // Check if current user is assigned to this task
-  var myAssignment = (t.assignments||[]).find(function(a){ return a.workerID === USER.accountID; });
+  // Show Update My Progress if admin/superadmin is also assigned
+  var myAssignment = assignments.find(function(a){ return a.workerID === USER.accountID; });
   var updateBtn = document.getElementById('taskDetailUpdateBtn');
   if (myAssignment && myAssignment.status !== 'Done') {
     if (updateBtn) {
       updateBtn.style.display = 'inline-flex';
+      updateBtn.textContent = 'Update My Progress';
       updateBtn.onclick = function() { closeModal('taskDetailModal'); openMyTaskUpdateModal(t.TaskID, myAssignment); };
     }
   } else {
     if (updateBtn) updateBtn.style.display = 'none';
   }
+
   openModal('taskDetailModal');
 }
 
@@ -2459,6 +2537,94 @@ function saveMyTaskUpdate(assignmentID) {
       loadTasks();
     } else {
       showToast(d.message || 'Update failed. Please try again.', 'error');
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
+// TASK FEEDBACK SYSTEM
+// ═══════════════════════════════════════════
+function sendTaskFeedback(assignmentID, workerName, action, taskID) {
+  var feedbackEl = document.getElementById('feedback-' + assignmentID);
+  var feedbackText = feedbackEl ? feedbackEl.value.trim() : '';
+
+  // For accept/revise, feedback is optional but recommended
+  // For note, feedback is required
+  if (action === 'note' && !feedbackText) {
+    showToast('Please write a note before sending.', 'error');
+    return;
+  }
+
+  var task = STATE.tasks.find(function(t){ return t.TaskID === taskID; });
+  var taskTitle = task ? task.Title : taskID;
+  var assignment = (task ? task.assignments || [] : []).find(function(a){ return a.assignmentID === assignmentID; });
+  var workerID = assignment ? assignment.workerID : null;
+
+  var actionLabels = { accept: 'accepted', revise: 'revision requested', note: 'note sent' };
+  var newStatus = null;
+
+  // Accept = mark as Done if not already
+  if (action === 'accept' && assignment && assignment.status !== 'Done') {
+    newStatus = 'Done';
+  }
+  // Revise = reset back to In Progress
+  if (action === 'revise') {
+    newStatus = 'In Progress';
+  }
+
+  // Build the feedback message
+  var prefix = action === 'accept' ? '[✓ ACCEPTED]' : action === 'revise' ? '[↩ REVISION NEEDED]' : '[💬 NOTE]';
+  var adminName = USER.fullName || USER.username;
+  var fullFeedback = prefix + ' from ' + adminName + ': ' + (feedbackText || (action === 'accept' ? 'Your submission has been accepted.' : 'Please revise your submission.'));
+
+  // Build notification message for worker
+  var notifMsg = action === 'accept'
+    ? 'Your task "' + taskTitle + '" has been ACCEPTED by ' + adminName + (feedbackText ? ': ' + feedbackText : '.')
+    : action === 'revise'
+    ? 'REVISION NEEDED on task "' + taskTitle + '" from ' + adminName + ': ' + (feedbackText || 'Please revise your submission.')
+    : 'Note from ' + adminName + ' on task "' + taskTitle + '": ' + feedbackText;
+
+  // Prepare payload
+  var payload = {
+    assignmentID: assignmentID,
+    workerID: workerID || USER.accountID,
+    remarks: (assignment && assignment.remarks ? assignment.remarks + '
+
+' : '') + fullFeedback,
+    gDriveLink: assignment ? (assignment.gDriveLink || '') : ''
+  };
+  if (newStatus) payload.status = newStatus;
+
+  // Disable all feedback buttons in this card while saving
+  var btns = document.querySelectorAll('[onclick*="' + assignmentID + '"]');
+  btns.forEach(function(b){ b.disabled = true; });
+
+  showToast('Sending feedback...', '');
+
+  api('updateTaskAssignment', payload, function(d) {
+    btns.forEach(function(b){ b.disabled = false; });
+    if (d.success) {
+      // Send in-app notification to the worker
+      if (workerID) {
+        api('createNotification', {
+          recipientAccountID: workerID,
+          type: 'TaskFeedback',
+          referenceID: taskID,
+          message: notifMsg
+        }, function(){});
+      }
+
+      var successMsg = action === 'accept' ? 'Submission accepted!' : action === 'revise' ? 'Revision requested.' : 'Note sent.';
+      showToast(successMsg, action === 'accept' ? 'success' : '');
+
+      // Clear the feedback textarea
+      if (feedbackEl) feedbackEl.value = '';
+
+      // Reload tasks and reopen the modal
+      loadTasks();
+      setTimeout(function(){ viewTask(taskID); }, 800);
+    } else {
+      showToast(d.message || 'Failed to send feedback.', 'error');
     }
   });
 }
