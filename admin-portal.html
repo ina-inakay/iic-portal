@@ -1490,100 +1490,96 @@ function viewTask(id) {
   var t = STATE.tasks.find(function(x){ return x.TaskID===id; });
   if (!t) return;
 
-  var html = '';
+  var out = '';
 
   // Task header
-  html += '<div style="background:var(--navy-light);padding:14px;border-radius:10px;margin-bottom:16px">';
-  html += '<div style="font-size:1rem;font-weight:700;color:var(--navy-dark);margin-bottom:4px">' + esc(t.Title) + '</div>';
-  html += '<div style="font-size:0.78rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap">';
-  html += '<span>🔖 ' + esc(t.TaskID) + '</span>';
-  html += '<span>📅 Deadline: ' + esc(t.Deadline||'—') + '</span>';
-  html += '<span>⚡ ' + esc(t.Priority) + ' Priority</span>';
-  html += '<span>📌 Status: ' + esc(t.Status) + '</span>';
-  html += '</div>';
-  if (t.Description) html += '<div style="font-size:0.83rem;color:var(--text-muted);margin-top:8px;line-height:1.5">' + esc(t.Description) + '</div>';
-  html += '</div>';
+  out += '<div style="background:var(--navy-light);padding:14px;border-radius:10px;margin-bottom:16px">';
+  out += '<div style="font-size:1rem;font-weight:700;color:var(--navy-dark);margin-bottom:4px">' + esc(t.Title) + '</div>';
+  out += '<div style="font-size:0.78rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap">';
+  out += '<span>🔖 ' + esc(t.TaskID) + '</span>';
+  out += '<span>📅 Deadline: ' + esc(t.Deadline||'—') + '</span>';
+  out += '<span>⚡ ' + esc(t.Priority) + '</span>';
+  out += '<span>📌 ' + esc(t.Status) + '</span>';
+  out += '</div>';
+  if (t.Description) out += '<div style="font-size:0.83rem;color:var(--text-muted);margin-top:8px;line-height:1.5">' + esc(t.Description) + '</div>';
+  out += '</div>';
 
-  // Each worker's submission
-  html += '<div style="font-weight:700;font-size:0.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);margin-bottom:12px">📋 Worker Submissions</div>';
+  out += '<div style="font-weight:700;font-size:0.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);margin-bottom:12px">📋 Worker Submissions</div>';
 
   var assignments = t.assignments || [];
-  if (assignments.length === 0) {
-    html += '<div style="color:var(--text-muted);font-size:0.83rem">No workers assigned.</div>';
+  if (!assignments.length) {
+    out += '<div style="color:var(--text-muted);font-size:0.83rem">No workers assigned yet.</div>';
   }
 
-  assignments.forEach(function(a) {
-    var pct = a.status==='Done'?100:a.status==='In Progress'?50:a.status==='Overdue'?100:0;
-    var statusColor = a.status==='Done'?'var(--success)':a.status==='Overdue'?'var(--error)':a.status==='In Progress'?'var(--navy)':'var(--amber)';
-    var cardBorder = a.status==='Done'?'#22c55e':a.status==='Overdue'?'var(--terra)':a.status==='In Progress'?'var(--navy)':'var(--border)';
+  assignments.forEach(function(a, idx) {
+    var pct   = a.status==='Done'?100:a.status==='In Progress'?50:a.status==='Overdue'?100:0;
+    var scol  = a.status==='Done'?'var(--success)':a.status==='Overdue'?'var(--error)':a.status==='In Progress'?'var(--navy)':'var(--amber)';
+    var bcol  = a.status==='Done'?'#22c55e':a.status==='Overdue'?'var(--terra)':a.status==='In Progress'?'var(--navy)':'var(--border)';
+    var safeID = (a.assignmentID||'').replace(/[^a-zA-Z0-9_-]/g,'');
 
-    html += '<div style="border:1.5px solid ' + cardBorder + ';border-radius:10px;padding:14px;margin-bottom:12px">';
+    out += '<div style="border:1.5px solid ' + bcol + ';border-radius:10px;padding:14px;margin-bottom:12px">';
 
-    // Worker name + status
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
-    html += '<div style="font-weight:600;font-size:0.88rem">' + esc(a.workerName) + '</div>';
-    html += '<span class="badge badge-' + (a.status==='Done'?'done':a.status==='Overdue'?'overdue':a.status==='In Progress'?'progress':'pending') + '">' + a.status + '</span>';
-    html += '</div>';
+    // Header
+    out += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+    out += '<div style="font-weight:600;font-size:0.88rem">' + esc(a.workerName) + '</div>';
+    out += '<span class="badge badge-' + (a.status==='Done'?'done':a.status==='Overdue'?'overdue':a.status==='In Progress'?'progress':'pending') + '">' + esc(a.status) + '</span>';
+    out += '</div>';
 
     // Progress bar
-    html += '<div class="progress-bar" style="margin-bottom:10px"><div class="progress-fill" style="width:' + pct + '%;background:' + statusColor + '"></div></div>';
+    out += '<div class="progress-bar" style="margin-bottom:10px"><div class="progress-fill" style="width:' + pct + '%;background:' + scol + '"></div></div>';
 
-    // Submission details
+    // Remarks
     if (a.remarks) {
-      html += '<div style="background:var(--cream);padding:10px;border-radius:8px;margin-bottom:8px">';
-      html += '<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">📝 Progress Notes</div>';
-      html += '<div style="font-size:0.83rem;line-height:1.5">' + esc(a.remarks).replace(/
-/g,'<br>') + '</div>';
-      html += '</div>';
+      out += '<div style="background:var(--cream);padding:10px;border-radius:8px;margin-bottom:8px">';
+      out += '<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">📝 Progress Notes</div>';
+      out += '<div style="font-size:0.83rem;line-height:1.5">' + esc(a.remarks).replace(/\n/g,'<br>') + '</div>';
+      out += '</div>';
     } else {
-      html += '<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic;margin-bottom:8px">No remarks submitted yet.</div>';
+      out += '<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic;margin-bottom:8px">No remarks submitted yet.</div>';
     }
 
     // Attachment
     if (a.fileURL || a.gDriveLink) {
-      html += '<div style="margin-bottom:8px">';
-      html += '<a href="' + esc(a.fileURL||a.gDriveLink) + '" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:var(--navy-light);color:var(--navy-mid);padding:6px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;text-decoration:none">📎 View Submitted File / Link</a>';
-      html += '</div>';
+      out += '<div style="margin-bottom:8px"><a href="' + esc(a.fileURL||a.gDriveLink) + '" target="_blank" ';
+      out += 'style="display:inline-flex;align-items:center;gap:6px;background:var(--navy-light);color:var(--navy-mid);padding:6px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;text-decoration:none">📎 View Submitted File</a></div>';
     }
 
-    // Completed timestamp
-    if (a.completedAt) {
-      html += '<div style="font-size:0.72rem;color:var(--success);margin-bottom:8px">✓ Completed: ' + esc(a.completedAt) + '</div>';
+    // Timestamps
+    if (a.completedAt) out += '<div style="font-size:0.72rem;color:var(--success);margin-bottom:4px">✓ Completed: ' + esc(a.completedAt) + '</div>';
+    if (a.updatedAt)   out += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px">Last updated: ' + esc(a.updatedAt) + '</div>';
+
+    // Feedback section - use data attributes to avoid quote issues
+    out += '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">';
+    out += '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin-bottom:6px">💬 Admin Feedback</div>';
+    out += '<textarea id="fb-' + safeID + '" class="form-control" placeholder="Write feedback for ' + esc(a.workerName) + '..." style="min-height:70px;font-size:0.83rem;margin-bottom:8px"></textarea>';
+    out += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+
+    if (a.status === 'Done' || a.status === 'In Progress' || a.status === 'Overdue') {
+      out += '<button class="btn btn-success btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="accept" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">✓ Accept</button>';
+      out += '<button class="btn btn-warn btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="revise" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">↩ Request Revision</button>';
     }
-    if (a.updatedAt) {
-      html += '<div style="font-size:0.7rem;color:var(--text-muted)">Last updated: ' + esc(a.updatedAt) + '</div>';
-    }
-
-    // Admin Feedback section
-    html += '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">';
-    html += '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin-bottom:6px">💬 Admin Feedback</div>';
-
-    // Show existing feedback if any (stored in a special prefix in remarks)
-    var feedbackMatch = a.adminFeedback || '';
-    if (feedbackMatch) {
-      html += '<div style="background:#FEF3E2;padding:8px 10px;border-radius:6px;font-size:0.8rem;margin-bottom:8px;border-left:3px solid var(--amber)">' + esc(feedbackMatch) + '</div>';
-    }
-
-    // Feedback input + action buttons
-    html += '<textarea id="feedback-' + a.assignmentID + '" class="form-control" placeholder="Write feedback for ' + esc(a.workerName) + '..." style="min-height:70px;font-size:0.83rem;margin-bottom:8px"></textarea>';
-    html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
-
-    // Only show Accept/Revise if worker has submitted something (In Progress or Done)
-    if (a.status === 'Done' || a.status === 'In Progress') {
-      html += '<button class="btn btn-success btn-sm" onclick="sendTaskFeedback('' + a.assignmentID + '','' + esc(a.workerName) + '','accept','' + t.TaskID + '')">✓ Accept</button>';
-      html += '<button class="btn btn-warn btn-sm" onclick="sendTaskFeedback('' + a.assignmentID + '','' + esc(a.workerName) + '','revise','' + t.TaskID + '')">↩ Request Revision</button>';
-    }
-    html += '<button class="btn btn-ghost btn-sm" onclick="sendTaskFeedback('' + a.assignmentID + '','' + esc(a.workerName) + '','note','' + t.TaskID + '')">💬 Send Note</button>';
-    html += '</div>';
-    html += '</div>'; // end feedback section
-
-    html += '</div>'; // end assignment card
+    out += '<button class="btn btn-ghost btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="note" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">💬 Send Note</button>';
+    out += '</div>';
+    out += '</div>'; // end feedback
+    out += '</div>'; // end card
   });
 
-  document.getElementById('taskDetailTitle').textContent = 'Review Task: ' + t.TaskID;
-  document.getElementById('taskDetailBody').innerHTML = html;
+  document.getElementById('taskDetailTitle').textContent = 'Review: ' + t.TaskID;
+  document.getElementById('taskDetailBody').innerHTML = out;
 
-  // Show Update My Progress if admin/superadmin is also assigned
+  // Attach click handlers AFTER setting innerHTML (no inline onclick needed)
+  document.querySelectorAll('.task-fb-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var asgnID   = this.getAttribute('data-asgn');
+      var wName    = this.getAttribute('data-worker');
+      var action   = this.getAttribute('data-action');
+      var taskID   = this.getAttribute('data-task');
+      var workerID = this.getAttribute('data-wid');
+      sendTaskFeedback(asgnID, wName, action, taskID, workerID);
+    });
+  });
+
+  // Show Update My Progress if admin is also assigned
   var myAssignment = assignments.find(function(a){ return a.workerID === USER.accountID; });
   var updateBtn = document.getElementById('taskDetailUpdateBtn');
   if (myAssignment && myAssignment.status !== 'Done') {
@@ -1599,160 +1595,6 @@ function viewTask(id) {
   openModal('taskDetailModal');
 }
 
-function deleteTask(id) {
-  showToast('Archiving task...', '');
-  api('deleteTask', { taskID: id, requestedBy: USER.accountID }, function(d) {
-    if (d.success) { showToast('Task archived successfully.', 'success'); loadTasks(); }
-    else showToast(d.message || 'Archive failed. Please try again.', 'error');
-  });
-}
-
-// ═══════════════════════════════════════════
-// ANNOUNCEMENTS
-// ═══════════════════════════════════════════
-function loadAnnouncements() {
-  api('getAnnouncements', {}, function(d) {
-    if (!d.success) return;
-    STATE.announcements = d.data || [];
-    renderAnnouncements();
-  });
-}
-
-function renderAnnouncements() {
-  var container = document.getElementById('announcementsList');
-  if (STATE.announcements.length === 0) {
-    container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3z"/></svg><p>No announcements yet</p></div>';
-    return;
-  }
-  container.innerHTML = STATE.announcements.map(function(a) {
-    return '<div class="card" style="margin-bottom:14px">' +
-      '<div class="card-body">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">' +
-          '<div style="flex:1">' +
-            (a.Pinned==='TRUE'?'<span style="font-size:0.7rem;background:var(--amber-light);color:var(--amber);padding:2px 8px;border-radius:20px;font-weight:600;margin-bottom:6px;display:inline-block">📌 Pinned</span><br>':'') +
-            '<strong style="font-size:0.95rem">' + esc(a.Title) + '</strong>' +
-          '</div>' +
-          '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0">' +
-            '<span class="badge badge-' + (a.Priority==='Urgent'?'urgent':'normal') + '">' + a.Priority + '</span>' +
-            '<button class="btn btn-danger btn-sm" onclick="deleteAnnouncement(\'' + a.AnnouncementID + '\')">Delete</button>' +
-          '</div>' +
-        '</div>' +
-        '<p style="font-size:0.83rem;color:var(--text-muted);line-height:1.5;margin-bottom:8px">' + esc(a.Body).replace(/\n/g,'<br>') + '</p>' +
-        '<div style="font-size:0.72rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap">' +
-          '<span>Posted: ' + esc(a.PostedAt) + '</span>' +
-          (a.FileURL||a.GDriveLink?'<a href="' + esc(a.FileURL||a.GDriveLink) + '" target="_blank" style="color:var(--navy-mid)">📎 Attachment</a>':'') +
-        '</div>' +
-      '</div></div>';
-  }).join('');
-}
-
-function openAnnouncementModal() {
-  ['ann-title','ann-body','ann-gdrive'].forEach(function(id){ document.getElementById(id).value=''; });
-  document.getElementById('ann-file').value='';
-  document.getElementById('ann-priority').value='Normal';
-  document.getElementById('ann-language').value='BOTH';
-  document.getElementById('ann-pin').checked=false;
-  STATE.annAttachType = 'file';
-  document.getElementById('ann-file').style.display='block';
-  document.getElementById('ann-gdrive').style.display='none';
-  document.getElementById('attachTypeBtn').textContent='Switch to GDrive Link';
-  openModal('announcementModal');
-}
-
-function toggleAttachType() {
-  if (STATE.annAttachType==='file') {
-    STATE.annAttachType='gdrive';
-    document.getElementById('ann-file').style.display='none';
-    document.getElementById('ann-gdrive').style.display='block';
-    document.getElementById('attachTypeBtn').textContent='Switch to File Upload';
-  } else {
-    STATE.annAttachType='file';
-    document.getElementById('ann-file').style.display='block';
-    document.getElementById('ann-gdrive').style.display='none';
-    document.getElementById('attachTypeBtn').textContent='Switch to GDrive Link';
-  }
-}
-
-function saveAnnouncement() {
-  var title = document.getElementById('ann-title').value.trim();
-  var body  = document.getElementById('ann-body').value.trim();
-  if (!title||!body) { showToast('Title and body are required.','error'); return; }
-  var btn = document.getElementById('annSaveBtn');
-  btn.disabled=true; btn.textContent='Posting…';
-  var payload = {
-    postedBy: USER.accountID, title: title, body: body,
-    priority: document.getElementById('ann-priority').value,
-    language: document.getElementById('ann-language').value,
-    pinned: document.getElementById('ann-pin').checked,
-    gDriveLink: STATE.annAttachType==='gdrive'?document.getElementById('ann-gdrive').value.trim():''
-  };
-  // Note: File upload to Drive requires additional Apps Script handling — GDrive link used for now
-  api('postAnnouncement', payload, function(d) {
-    btn.disabled=false; btn.textContent='Post Announcement';
-    if (d.success) { closeModal('announcementModal'); showToast('Announcement posted!','success'); loadAnnouncements(); }
-    else showToast(d.message,'error');
-  });
-}
-
-function deleteAnnouncement(id) {
-  showToast('Archiving announcement...', '');
-  api('deleteAnnouncement', { annID: id, requestedBy: USER.accountID }, function(d) {
-    if (d.success) { showToast('Announcement archived.', 'success'); loadAnnouncements(); }
-    else showToast(d.message || 'Archive failed.', 'error');
-  });
-}
-
-// ═══════════════════════════════════════════
-// BENEFICIARIES
-// ═══════════════════════════════════════════
-function loadBeneficiaries() {
-  var tbody = document.getElementById('beneficiariesTableBody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="7"><div class="loading"><span class="spinner-sm"></span> Loading beneficiaries…</div></td></tr>';
-  api('getBeneficiaries', { requesterID: USER.accountID, requesterRole: USER.role }, function(d) {
-    if (!d.success) { showToast('Failed to load beneficiaries: ' + (d.message||'Unknown error'), 'error'); return; }
-    STATE.beneficiaries = d.data || [];
-    renderBeneficiaries();
-    updateDashboardStats();
-    // Populate program filter
-    var programs = [...new Set(STATE.beneficiaries.map(function(b){ return b.ProgramType; }).filter(Boolean))];
-    var sel = document.getElementById('benProgramFilter');
-    sel.innerHTML = '<option value="">All Programs</option>' + programs.map(function(p){ return '<option>' + esc(p) + '</option>'; }).join('');
-  });
-}
-
-function renderBeneficiaries() {
-  var data = STATE.beneficiaries.filter(function(b) {
-    var pOk = !STATE.benProgramFilter || b.ProgramType === STATE.benProgramFilter;
-    var sOk = !STATE.benStatusFilter  || b.Status === STATE.benStatusFilter;
-    return pOk && sOk;
-  });
-  var tbody = document.getElementById('beneficiariesTableBody');
-  if (data.length===0) { tbody.innerHTML='<tr><td colspan="7"><div class="empty-state"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><p>No beneficiaries found</p></div></td></tr>'; return; }
-  tbody.innerHTML = data.map(function(b) {
-    return '<tr>' +
-      '<td style="color:var(--text-muted);font-size:0.78rem">' + esc(b.BeneficiaryID) + (b.DuplicateFlag==='TRUE'?'<span class="badge badge-flagged" style="margin-left:4px">Dup</span>':'') + '</td>' +
-      '<td><strong>' + esc(b.FullName) + '</strong></td>' +
-      '<td><span style="font-size:0.8rem">' + esc(b.ProgramType||'—') + '</span></td>' +
-      '<td>' + esc(b.AssignedWorkerName||'—') + '</td>' +
-      '<td><span class="badge badge-' + (b.Status==='Active'?'active':b.Status==='Completed'?'done':'inactive') + '">' + b.Status + '</span></td>' +
-      '<td style="font-size:0.8rem;color:var(--text-muted)">' + esc(b.DateRegistered||'—') + '</td>' +
-      '<td><div class="td-actions">' +
-        '<button class="btn btn-ghost btn-sm" onclick="viewBeneficiary(\'' + b.BeneficiaryID + '\')">View Logs</button>' +
-        '<button class="btn btn-danger btn-sm" onclick="archiveBeneficiary(\'' + b.BeneficiaryID + '\')">Archive</button>' +
-      '</div></td></tr>';
-  }).join('');
-}
-
-function filterBeneficiaries(type, val) {
-  if (type==='program') STATE.benProgramFilter = val;
-  else STATE.benStatusFilter = val;
-  renderBeneficiaries();
-}
-
-function searchBeneficiaries(val) {
-  var v = val.toLowerCase();
-  document.querySelectorAll('#beneficiariesTableBody tr').forEach(function(r){ r.style.display=r.textContent.toLowerCase().includes(v)?'':'none'; });
-}
 
 function viewBeneficiary(id) {
   var b = STATE.beneficiaries.find(function(x){ return x.BeneficiaryID===id; });
@@ -2544,7 +2386,7 @@ function saveMyTaskUpdate(assignmentID) {
 // ═══════════════════════════════════════════
 // TASK FEEDBACK SYSTEM
 // ═══════════════════════════════════════════
-function sendTaskFeedback(assignmentID, workerName, action, taskID) {
+function sendTaskFeedback(assignmentID, workerName, action, taskID, workerID) {
   var feedbackEl = document.getElementById('feedback-' + assignmentID);
   var feedbackText = feedbackEl ? feedbackEl.value.trim() : '';
 
@@ -2558,7 +2400,7 @@ function sendTaskFeedback(assignmentID, workerName, action, taskID) {
   var task = STATE.tasks.find(function(t){ return t.TaskID === taskID; });
   var taskTitle = task ? task.Title : taskID;
   var assignment = (task ? task.assignments || [] : []).find(function(a){ return a.assignmentID === assignmentID; });
-  var workerID = assignment ? assignment.workerID : null;
+  workerID = workerID || (assignment ? assignment.workerID : null);
 
   var actionLabels = { accept: 'accepted', revise: 'revision requested', note: 'note sent' };
   var newStatus = null;
