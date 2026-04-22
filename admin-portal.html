@@ -458,25 +458,25 @@ textarea.form-control { resize: vertical; min-height: 90px; }
       <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       Beneficiaries
     </div>
-    <div class="nav-item" onclick="showPanel('orgchart')" data-panel="orgchart">
+    <div class="nav-item" onclick="showPanel('orgchart')" data-panel="orgchart" id="orgchartNavItem">
       <svg viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><rect x="1" y="14" width="6" height="4" rx="1"/><rect x="9" y="14" width="6" height="4" rx="1"/><rect x="17" y="14" width="6" height="4" rx="1"/><path d="M4 14v-3a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v3"/><line x1="12" y1="6" x2="12" y2="10"/></svg>
       Org Chart
     </div>
-    <div class="nav-item" onclick="showPanel('programs')" data-panel="programs">
+    <div class="nav-item" onclick="showPanel('programs')" data-panel="programs" id="programsNavItem">
       <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
       Program Types
       <span class="nav-badge" id="pendingProgBadge" style="display:none">0</span>
     </div>
 
     <div class="nav-section">System</div>
-    <div class="nav-item" onclick="showPanel('resets')" data-panel="resets">
+    <div class="nav-item" onclick="showPanel('resets')" data-panel="resets" id="resetsNavItem">
       <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       Password Resets
       <span class="nav-badge" id="resetsBadge" style="display:none">0</span>
     </div>
 
-    <div class="nav-section">External</div>
-    <a href="https://www.ina-inakay.com/web-client-handling-dashboard-admin-access"
+    <div class="nav-section" id="externalNavSection">External</div>
+    <a id="externalDashLink" href="https://www.ina-inakay.com/web-client-handling-dashboard-admin-access"
        target="_blank"
        class="nav-item"
        style="text-decoration:none;background:linear-gradient(135deg,rgba(192,85,42,0.15),rgba(212,131,42,0.1));border-left-color:var(--amber)">
@@ -1063,7 +1063,7 @@ var STATE = {
   taskFilter: 'all', progFilter: 'Active',
   accountRoleFilter: '', accountStatusFilter: '',
   benProgramFilter: '', benStatusFilter: '',
-  editAccountID: null,
+  editAccountID: null, editAnnID: null,
   annAttachType: 'file'
 };
 
@@ -1083,15 +1083,15 @@ window.addEventListener('DOMContentLoaded', function() {
   document.getElementById("userAvatar").innerHTML = '<img src="'+ROLE_AVATARS[USER.role||"worker"]+'" style="width:100%;height:100%;border-radius:50%;object-fit:cover">';
   document.getElementById('sidebarRole').textContent = USER.role === 'superadmin' ? 'Super Admin' : 'Admin';
 
-  // Hide Accounts section for regular admins
+  // Hide sections restricted to SuperAdmin only
   if (USER.role !== 'superadmin') {
-    var accNav = document.getElementById('accountsNavItem');
-    if (accNav) {
-      accNav.style.display = 'none';
-      // Also hide the Management section label if no other items under it
-    }
-    // Redirect to dashboard if admin tries to access accounts panel directly
-    if (window.location.hash === '#accounts') showPanel('dashboard');
+    var restricted = ['accountsNavItem','orgchartNavItem','programsNavItem','resetsNavItem','externalNavSection'];
+    restricted.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    // If currently on a restricted panel, redirect to dashboard
+    showPanel('dashboard');
   }
 
   // Restrict role options based on current user role
@@ -1731,11 +1731,13 @@ function loadPrograms() {
 }
 
 function loadAllPrograms() {
-  // We use a workaround: call getProgramTypes which returns Active,
-  // but for admin we need all. We'll call getAccounts endpoint
-  // and filter. For now, show what we have.
-  api('getProgramTypes', {}, function(d) {
-    STATE.programs = d.data || [];
+  api('getAllProgramTypes', {}, function(d) {
+    if (d.success && d.data) {
+      STATE.programs = d.data;
+    } else {
+      // fallback: getProgramTypes only returns Active
+      STATE.programs = d.data || [];
+    }
     renderPrograms();
     var cnt = STATE.programs.filter(function(p){ return p.Status==='Pending'; }).length;
     var badge = document.getElementById('pendingProgBadge');
@@ -2468,6 +2470,1661 @@ function sendTaskFeedback(assignmentID, workerName, action, taskID, workerID) {
     } else {
       showToast(d.message || 'Failed to send feedback.', 'error');
     }
+  });
+}
+
+// ═══════════════════════════════════════════
+// ANNOUNCEMENTS
+// ═══════════════════════════════════════════
+function openAnnouncementModal(annID) {
+  STATE.editAnnID = annID || null;
+  var isEdit = !!annID;
+  document.getElementById('annModalTitle').textContent = isEdit ? 'Edit Announcement' : 'New Announcement';
+  document.getElementById('ann-title').value = '';
+  document.getElementById('ann-body').value = '';
+  document.getElementById('ann-priority').value = 'Normal';
+  document.getElementById('ann-language').value = 'BOTH';
+  document.getElementById('ann-pin').checked = false;
+  document.getElementById('ann-gdrive').value = '';
+  document.getElementById('ann-file').value = '';
+  STATE.annAttachType = 'file';
+  document.getElementById('ann-file').style.display = 'block';
+  document.getElementById('ann-gdrive').style.display = 'none';
+  document.getElementById('attachTypeBtn').textContent = 'Switch to GDrive Link';
+  if (isEdit) {
+    var a = STATE.announcements.find(function(x){ return x.AnnouncementID === annID; });
+    if (a) {
+      document.getElementById('ann-title').value    = a.Title || '';
+      document.getElementById('ann-body').value     = a.Body  || '';
+      document.getElementById('ann-priority').value = a.Priority || 'Normal';
+      document.getElementById('ann-language').value = a.Language || 'BOTH';
+      document.getElementById('ann-pin').checked    = a.Pinned === 'TRUE';
+    }
+  }
+  document.getElementById('annSaveBtn').disabled = false;
+  document.getElementById('annSaveBtn').textContent = isEdit ? 'Save Changes' : 'Post Announcement';
+  openModal('announcementModal');
+}
+
+function toggleAttachType() {
+  if (STATE.annAttachType === 'file') {
+    STATE.annAttachType = 'gdrive';
+    document.getElementById('ann-file').style.display  = 'none';
+    document.getElementById('ann-gdrive').style.display = 'block';
+    document.getElementById('attachTypeBtn').textContent = 'Switch to File Upload';
+  } else {
+    STATE.annAttachType = 'file';
+    document.getElementById('ann-file').style.display  = 'block';
+    document.getElementById('ann-gdrive').style.display = 'none';
+    document.getElementById('attachTypeBtn').textContent = 'Switch to GDrive Link';
+  }
+}
+
+function saveAnnouncement() {
+  var title = document.getElementById('ann-title').value.trim();
+  var body  = document.getElementById('ann-body').value.trim();
+  if (!title || !body) { showToast('Title and body are required.', 'error'); return; }
+  var btn = document.getElementById('annSaveBtn');
+  btn.disabled = true; btn.textContent = 'Posting…';
+  var payload = {
+    postedBy: USER.accountID,
+    title:    title,
+    body:     body,
+    priority: document.getElementById('ann-priority').value,
+    language: document.getElementById('ann-language').value,
+    pinned:   document.getElementById('ann-pin').checked,
+    gDriveLink: STATE.annAttachType === 'gdrive' ? document.getElementById('ann-gdrive').value.trim() : ''
+  };
+  if (STATE.editAnnID) {
+    payload.annID     = STATE.editAnnID;
+    payload.updatedBy = USER.accountID;
+    api('updateAnnouncement', payload, function(d) {
+      btn.disabled = false; btn.textContent = 'Save Changes';
+      if (d.success) { closeModal('announcementModal'); showToast('Announcement updated!', 'success'); loadAnnouncements(); }
+      else showToast(d.message || 'Failed to update.', 'error');
+    });
+  } else {
+    api('postAnnouncement', payload, function(d) {
+      btn.disabled = false; btn.textContent = 'Post Announcement';
+      if (d.success) { closeModal('announcementModal'); showToast('Announcement posted!', 'success'); loadAnnouncements(); }
+      else showToast(d.message || 'Failed to post.', 'error');
+    });
+  }
+}
+
+function renderAnnouncements() {
+  var container = document.getElementById('announcementsList');
+  if (!container) return;
+  if (!STATE.announcements || STATE.announcements.length === 0) {
+    container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3z"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><p>No announcements yet.</p></div>';
+    return;
+  }
+  container.innerHTML = STATE.announcements.map(function(a) {
+    return '<div class="card" style="margin-bottom:14px">' +
+      '<div class="card-body">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">' +
+          '<div style="flex:1">' +
+            (a.Pinned==='TRUE' ? '<span style="font-size:0.7rem;background:var(--amber-light);color:var(--amber);padding:2px 8px;border-radius:20px;font-weight:600;margin-bottom:6px;display:inline-block">📌 Pinned</span><br>' : '') +
+            '<strong style="font-size:0.95rem">' + esc(a.Title) + '</strong>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0">' +
+            '<span class="badge badge-' + (a.Priority==='Urgent'?'urgent':'normal') + '">' + esc(a.Priority) + '</span>' +
+            '<button class="btn btn-ghost btn-sm ann-edit-btn" data-id="' + esc(a.AnnouncementID) + '">Edit</button>' +
+            '<button class="btn btn-danger btn-sm ann-del-btn" data-id="' + esc(a.AnnouncementID) + '">Delete</button>' +
+          '</div>' +
+        '</div>' +
+        '<p style="font-size:0.83rem;color:var(--text-muted);line-height:1.5;margin-bottom:8px">' + esc(a.Body).replace(/\n/g,'<br>') + '</p>' +
+        '<div style="font-size:0.72rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap">' +
+          '<span>Posted: ' + esc(a.PostedAt) + '</span>' +
+          (a.FileURL || a.GDriveLink ? '<a href="' + esc(a.FileURL||a.GDriveLink) + '" target="_blank" style="color:var(--navy-mid)">📎 Attachment</a>' : '') +
+        '</div>' +
+      '</div></div>';
+  }).join('');
+
+  // Attach event handlers using delegation (avoids inline onclick quote issues)
+  container.querySelectorAll('.ann-edit-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { openAnnouncementModal(this.getAttribute('data-id')); });
+  });
+  container.querySelectorAll('.ann-del-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { deleteAnnouncement(this.getAttribute('data-id')); });
+  });
+}
+
+function deleteAnnouncement(id) {
+  showToast('Archiving announcement...', '');
+  api('deleteAnnouncement', { annID: id, requestedBy: USER.accountID }, function(d) {
+    if (d.success) { showToast('Announcement archived.', 'success'); loadAnnouncements(); }
+    else showToast(d.message || 'Archive failed.', 'error');
+  });
+}
+
+// ═══════════════════════════════════════════
+// TASKS — missing helpers
+// ═══════════════════════════════════════════
+function flagOrphanedTasks(workerID) {
+  var sheet_data = STATE.tasks;
+  // Client-side flag only — actual flag happens server-side via deactivateAccount
+  console.log('Orphaned tasks flagged server-side for:', workerID);
+}
+
+function deleteTask(id) {
+  showToast('Archiving task...', '');
+  api('deleteTask', { taskID: id, requestedBy: USER.accountID }, function(d) {
+    if (d.success) { showToast('Task archived successfully.', 'success'); loadTasks(); }
+    else showToast(d.message || 'Archive failed. Please try again.', 'error');
+  });
+}
+
+</script>
+</body>
+</html>function loadAnnouncements() {
+  api('getAnnouncements', {}, function(d) {
+    if (!d.success) { showToast('Failed to load announcements.', 'error'); return; }
+    STATE.announcements = d.data || [];
+    renderAnnouncements();
+  });
+}
+
+function loadAll() {
+  showToast('Loading portal data...', '');
+  loadAccounts();
+  loadTasks();
+  loadAnnouncements();
+  loadBeneficiaries();
+  loadOrgChart();
+  loadPrograms();
+  loadNotifications();
+  loadResets();
+}
+
+// ═══════════════════════════════════════════
+// API HELPER
+// ═══════════════════════════════════════════
+function api(action, data, cb) {
+  data.action = action;
+  fetch(API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(data),
+    redirect: 'follow'
+  })
+  .then(function(r) { return r.text(); })
+  .then(function(text) {
+    try { return cb(JSON.parse(text)); }
+    catch(e) { showToast('Response error: ' + text.substring(0,100), 'error'); }
+  })
+  .catch(function(e) { showToast('Connection error: ' + e.message, 'error'); });
+}
+
+// ═══════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════
+var panelTitles = { dashboard:'Dashboard', accounts:'Accounts', tasks:'Tasks', announcements:'Announcements', beneficiaries:'Beneficiaries', orgchart:'Org Chart', programs:'Program Types', resets:'Password Resets' };
+
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
+  var p = document.getElementById('panel-' + name);
+  if (p) p.classList.add('active');
+  var n = document.querySelector('[data-panel="' + name + '"]');
+  if (n) n.classList.add('active');
+  document.getElementById('topbarTitle').textContent = panelTitles[name] || name;
+  closeSidebar();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════
+// TOASTS
+// ═══════════════════════════════════════════
+function showToast(msg, type) {
+  var wrap = document.getElementById('toastWrap');
+  var t = document.createElement('div');
+  t.className = 'toast ' + (type || '');
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(function() { t.style.opacity='0'; t.style.transition='opacity 0.4s'; setTimeout(function(){ t.remove(); }, 400); }, 3500);
+}
+
+// ═══════════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(function(o) {
+  o.addEventListener('click', function(e) { if (e.target === o) o.classList.remove('open'); });
+});
+
+// ═══════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════
+function loadNotifications() {
+  api('getNotifications', { accountID: USER.accountID }, function(d) {
+    if (!d.success) return;
+    STATE.notifications = d.data || [];
+    renderNotifications();
+  });
+}
+
+function renderNotifications() {
+  var unread = STATE.notifications.filter(function(n){ return n.IsRead === 'FALSE'; });
+  var badge = document.getElementById('notifBadge');
+  if (unread.length > 0) { badge.textContent = unread.length; badge.style.display = 'flex'; }
+  else badge.style.display = 'none';
+
+  var list = document.getElementById('notifList');
+  if (STATE.notifications.length === 0) { list.innerHTML = '<div class="notif-empty">No notifications</div>'; return; }
+  list.innerHTML = STATE.notifications.slice(0,20).map(function(n) {
+    return '<div class="notif-item ' + (n.IsRead==='FALSE'?'unread':'') + '" onclick="readNotif(\'' + n.NotificationID + '\')">' +
+      '<div class="notif-dot"></div><div><div class="notif-item-text">' + esc(n.Message) + '</div><div class="notif-item-time">' + esc(n.CreatedAt) + '</div></div></div>';
+  }).join('');
+}
+
+function toggleNotifs() {
+  document.getElementById('notifDropdown').classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#notifBtn') && !e.target.closest('#notifDropdown')) {
+    document.getElementById('notifDropdown').classList.remove('open');
+  }
+});
+
+function readNotif(id) {
+  api('markNotificationRead', { notificationID: id, accountID: USER.accountID }, function() { loadNotifications(); });
+}
+
+function markAllRead() {
+  var unread = STATE.notifications.filter(function(n){ return n.IsRead==='FALSE'; });
+  var done = 0;
+  if (unread.length === 0) return;
+  unread.forEach(function(n) {
+    api('markNotificationRead', { notificationID: n.NotificationID, accountID: USER.accountID }, function() {
+      done++;
+      if (done === unread.length) loadNotifications();
+    });
+  });
+}
+
+// ═══════════════════════════════════════════
+// ACCOUNTS
+// ═══════════════════════════════════════════
+function loadAccounts() {
+  var tbody = document.getElementById('accountsTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6"><div class="loading"><span class="spinner-sm"></span> Loading accounts…</div></td></tr>';
+  api('getAccounts', {}, function(d) {
+    if (!d.success) { showToast('Failed to load accounts: ' + (d.message||'Unknown error'), 'error'); return; }
+    STATE.accounts = d.data || [];
+    renderAccounts();
+    updateDashboardStats();
+    populateWorkerDropdown();
+  });
+}
+
+function renderAccounts() {
+  var data = STATE.accounts.filter(function(a) {
+    var roleOk = !STATE.accountRoleFilter || a.Role === STATE.accountRoleFilter;
+    var statusOk = !STATE.accountStatusFilter || a.Status === STATE.accountStatusFilter;
+    return roleOk && statusOk;
+  });
+  var tbody = document.getElementById('accountsTableBody');
+  if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><p>No accounts found</p></div></td></tr>'; return; }
+  tbody.innerHTML = data.map(function(a) {
+    var isSelf = a.AccountID === USER.accountID;
+    var isSuper = a.Role === 'superadmin';
+    var canDeact = !isSelf && !isSuper && a.Status === 'Active';
+    return '<tr>' +
+      '<td><div style="display:flex;align-items:center;gap:9px"><img src="' + (ROLE_AVATARS[a.Role]||ROLE_AVATARS['worker']) + '" style="width:30px;height:30px;border-radius:50%;flex-shrink:0" /><strong>' + esc(a.FullName) + '</strong></div></td>' +
+      '<td style="color:var(--text-muted)">' + esc(a.Username) + '</td>' +
+      '<td><span class="badge badge-' + a.Role + '">' + a.Role + '</span></td>' +
+      '<td>' + esc(a.Department || '—') + '</td>' +
+      '<td><span class="badge badge-' + (a.Status==='Active'?'active':'inactive') + '">' + a.Status + '</span></td>' +
+      '<td><div class="td-actions">' +
+        '<button class="btn btn-ghost btn-sm" onclick="editAccount(\'' + a.AccountID + '\')">Edit</button>' +
+        (!isSelf ? '<button class="btn btn-ghost btn-sm" style="color:var(--amber)" onclick="openResetPwModal(\'' + a.AccountID + '\',\'' + esc(a.FullName) + '\')">Reset PW</button>' : '') +
+        (canDeact ? '<button class="btn btn-danger btn-sm" onclick="deactivateAccount(\'' + a.AccountID + '\',\'' + esc(a.FullName) + '\')">Deactivate</button>' : '') +
+        (a.Status === 'Inactive' && !isSuper ? '<button class="btn btn-amber btn-sm" onclick="activateAccount(\'' + a.AccountID + '\')">Activate</button>' : '') +
+      '</div></td></tr>';
+  }).join('');
+}
+
+function filterAccounts(val) {
+  var v = val.toLowerCase();
+  var rows = document.querySelectorAll('#accountsTableBody tr');
+  rows.forEach(function(r) { r.style.display = r.textContent.toLowerCase().includes(v) ? '' : 'none'; });
+}
+function filterAccountsByRole(v) { STATE.accountRoleFilter = v; renderAccounts(); }
+function filterAccountsByStatus(v) { STATE.accountStatusFilter = v; renderAccounts(); }
+
+function populateWorkerDropdown() {
+  var sel = document.getElementById('task-workers');
+  sel.innerHTML = '';
+  STATE.accounts.filter(function(a){ return a.Status==='Active'; }).forEach(function(a) {
+    var opt = document.createElement('option');
+    opt.value = a.AccountID;
+    opt.textContent = a.FullName + ' (' + a.Role + ')';
+    sel.appendChild(opt);
+  });
+}
+
+function openAccountModal(accountID) {
+  STATE.editAccountID = accountID || null;
+  var isEdit = !!accountID;
+  document.getElementById('accountModalTitle').textContent = isEdit ? 'Edit Account' : 'New Account';
+  document.getElementById('accountModalSaveBtn').textContent = isEdit ? 'Save Changes' : 'Create Account';
+  document.getElementById('acc-pw-hint').style.display = isEdit ? 'block' : 'none';
+  hideAlert('accountModalError');
+
+  // Re-apply role restrictions each time modal opens (options may have been removed)
+  var roleSelect = document.getElementById('acc-role');
+  roleSelect.innerHTML = '<option value="worker">Worker</option>';
+  if (USER.role === 'superadmin' || USER.role === 'admin') {
+    roleSelect.innerHTML += '<option value="admin">Admin</option>';
+  }
+  if (USER.role === 'superadmin') {
+    roleSelect.innerHTML += '<option value="superadmin">Super Admin</option>';
+  }
+
+  if (isEdit) {
+    var a = STATE.accounts.find(function(x){ return x.AccountID === accountID; });
+    if (a) {
+      document.getElementById('acc-fullname').value = a.FullName || '';
+      document.getElementById('acc-username').value = a.Username || '';
+      document.getElementById('acc-password').value = '';
+      document.getElementById('acc-role').value = a.Role || 'worker';
+      document.getElementById('acc-position').value = a.Position || '';
+      document.getElementById('acc-department').value = a.Department || '';
+      document.getElementById('acc-email').value = a.Email || '';
+      document.getElementById('acc-contact').value = a.ContactNumber || '';
+      document.getElementById('acc-hired').value = '';
+      document.getElementById('acc-tags').value = a.Tags || '';
+    }
+  } else {
+    ['acc-fullname','acc-username','acc-password','acc-position','acc-department','acc-email','acc-contact','acc-tags'].forEach(function(id){ document.getElementById(id).value=''; });
+    document.getElementById('acc-role').value = 'worker';
+  }
+  openModal('accountModal');
+}
+
+function editAccount(id) { openAccountModal(id); }
+
+function saveAccount() {
+  var fullName = document.getElementById('acc-fullname').value.trim();
+  var username = document.getElementById('acc-username').value.trim();
+  var password = document.getElementById('acc-password').value;
+  var role     = document.getElementById('acc-role').value;
+  if (!fullName || !username) { showAlert('accountModalError', 'Full name and username are required.'); return; }
+  if (!STATE.editAccountID && !password) { showAlert('accountModalError', 'Password is required for new accounts.'); return; }
+  if (password && password.length < 6) { showAlert('accountModalError', 'Password must be at least 6 characters.'); return; }
+
+  var payload = {
+    fullName: fullName, username: username, role: role,
+    position: document.getElementById('acc-position').value.trim(),
+    department: document.getElementById('acc-department').value.trim(),
+    email: document.getElementById('acc-email').value.trim(),
+    contact: document.getElementById('acc-contact').value.trim(),
+    dateHired: document.getElementById('acc-hired').value,
+    tags: document.getElementById('acc-tags').value.trim(),
+    createdBy: USER.accountID, updatedBy: USER.accountID
+  };
+  if (password) payload.password = password;
+
+  setBtnLoading('accountModalSaveBtn', true, STATE.editAccountID ? 'Saving...' : 'Creating...');
+  if (STATE.editAccountID) {
+    payload.accountID = STATE.editAccountID;
+    api('updateAccount', payload, function(d) {
+      setBtnLoading('accountModalSaveBtn', false, 'Save Changes');
+      if (d.success) { closeModal('accountModal'); showToast('Account updated successfully.', 'success'); loadAccounts(); }
+      else showAlert('accountModalError', 'accountModalErrorText', d.message || 'Update failed.');
+    });
+  } else {
+    api('createAccount', payload, function(d) {
+      setBtnLoading('accountModalSaveBtn', false, 'Create Account');
+      if (d.success) { closeModal('accountModal'); showToast('Account created successfully.', 'success'); loadAccounts(); }
+      else showAlert('accountModalError', 'accountModalErrorText', d.message || 'Creation failed.');
+    });
+  }
+}
+
+function deactivateAccount(id, name) {
+  if (!confirm('Deactivate ' + name + '? Their incomplete tasks will be flagged for reassignment.')) return;
+  showToast('Deactivating account...', '');
+  api('deactivateAccount', { accountID: id, requestedBy: USER.accountID }, function(d) {
+    if (d.success) { showToast('Account deactivated.', 'success'); loadAccounts(); }
+    else showToast(d.message || 'Deactivation failed.', 'error');
+  });
+}
+
+function activateAccount(id) {
+  api('updateAccount', { accountID: id, updatedBy: USER.accountID, status: 'Active' }, function(d) {
+    // Note: status update would need a specific handler — for now show info
+    showToast('To reactivate, use the Google Sheet Accounts tab directly.', '');
+  });
+}
+
+// ═══════════════════════════════════════════
+// TASKS
+// ═══════════════════════════════════════════
+function loadTasks() {
+  var tbody = document.getElementById('tasksTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7"><div class="loading"><span class="spinner-sm"></span> Loading tasks…</div></td></tr>';
+  api('getTasks', { requesterID: USER.accountID, requesterRole: USER.role }, function(d) {
+    if (!d.success) { showToast('Failed to load tasks: ' + (d.message||'Unknown error'), 'error'); return; }
+    STATE.tasks = d.data || [];
+    renderTasks();
+    updateDashboardStats();
+    if (STATE.tasks.length > 0) showToast('Loaded ' + STATE.tasks.length + ' task(s).', 'success');
+  });
+}
+
+function renderTasks() {
+  var data = STATE.tasks.filter(function(t) {
+    if (STATE.taskFilter === 'all') return t.Status !== 'Archived';
+    if (STATE.taskFilter === 'Overdue') return t.assignments && t.assignments.some(function(a){ return a.status==='Overdue'; });
+    return t.Status === STATE.taskFilter;
+  });
+  var tbody = document.getElementById('tasksTableBody');
+  if (data.length === 0) { tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><p>No tasks found</p></div></td></tr>'; return; }
+  tbody.innerHTML = data.map(function(t) {
+    var workers = (t.assignments||[]).map(function(a){ return '<span class="chip">' + esc(a.workerName) + '</span>'; }).join('');
+    var hasOverdue = (t.assignments||[]).some(function(a){ return a.status==='Overdue'; });
+    var status = hasOverdue ? 'Overdue' : t.Status;
+    return '<tr>' +
+      '<td style="color:var(--text-muted);font-size:0.78rem">' + esc(t.TaskID) + '</td>' +
+      '<td><strong>' + esc(t.Title) + '</strong></td>' +
+      '<td><span class="badge badge-' + (t.Priority==='Urgent'?'urgent':'normal') + '">' + t.Priority + '</span></td>' +
+      '<td>' + esc(t.Deadline||'—') + '</td>' +
+      '<td><span class="badge badge-' + (status==='Closed'?'done':status==='Overdue'?'overdue':status==='Open'?'progress':'') + '">' + status + '</span></td>' +
+      '<td>' + (workers||'<span style="color:var(--text-muted)">—</span>') + '</td>' +
+      '<td><div class="td-actions">' +
+        '<button class="btn btn-ghost btn-sm" onclick="viewTask(\'' + t.TaskID + '\')">View</button>' +
+        (t.Status !== 'Archived' ? '<button class="btn btn-danger btn-sm" onclick="deleteTask(\'' + t.TaskID + '\')">Archive</button>' : '') +
+      '</div></td></tr>';
+  }).join('');
+
+  var overdueCnt = STATE.tasks.filter(function(t){ return t.assignments && t.assignments.some(function(a){ return a.status==='Overdue'; }); }).length;
+  var badge = document.getElementById('overdueTasksBadge');
+  if (overdueCnt > 0) { badge.textContent = overdueCnt; badge.style.display = 'inline-flex'; }
+  else badge.style.display = 'none';
+}
+
+function filterTasks(status, btn) {
+  STATE.taskFilter = status;
+  document.querySelectorAll('#panel-tasks .tab').forEach(function(t){ t.classList.remove('active'); });
+  btn.classList.add('active');
+  renderTasks();
+}
+
+function searchTasks(val) {
+  var v = val.toLowerCase();
+  document.querySelectorAll('#tasksTableBody tr').forEach(function(r){ r.style.display = r.textContent.toLowerCase().includes(v)?'':'none'; });
+}
+
+function openTaskModal() {
+  document.getElementById('task-title').value = '';
+  document.getElementById('task-description').value = '';
+  document.getElementById('task-deadline').value = '';
+  document.getElementById('task-priority').value = 'Normal';
+  hideAlert('taskModalError');
+  openModal('taskModal');
+}
+
+function saveTask() {
+  var title    = document.getElementById('task-title').value.trim();
+  var deadline = document.getElementById('task-deadline').value;
+  var sel      = document.getElementById('task-workers');
+  var workers  = Array.from(sel.selectedOptions).map(function(o){ return o.value; });
+  if (!title)            { showAlert('taskModalError', 'taskModalErrorText', 'Task title is required.'); return; }
+  if (!deadline)         { showAlert('taskModalError', 'taskModalErrorText', 'Deadline is required.'); return; }
+  if (workers.length===0){ showAlert('taskModalError', 'taskModalErrorText', 'Please assign at least one worker.'); return; }
+
+  setBtnLoading('taskCreateBtn', true, 'Creating Task...');
+  api('createTask', {
+    createdBy: USER.accountID, title: title,
+    description: document.getElementById('task-description').value.trim(),
+    deadline: deadline, priority: document.getElementById('task-priority').value,
+    assignedWorkerIDs: workers
+  }, function(d) {
+    setBtnLoading('taskCreateBtn', false, 'Create Task');
+    if (d.success) { closeModal('taskModal'); showToast('Task created and workers notified.', 'success'); loadTasks(); }
+    else showAlert('taskModalError', 'taskModalErrorText', d.message || 'Something went wrong.');
+  });
+}
+
+function viewTask(id) {
+  var t = STATE.tasks.find(function(x){ return x.TaskID===id; });
+  if (!t) return;
+
+  var out = '';
+
+  // Task header
+  out += '<div style="background:var(--navy-light);padding:14px;border-radius:10px;margin-bottom:16px">';
+  out += '<div style="font-size:1rem;font-weight:700;color:var(--navy-dark);margin-bottom:4px">' + esc(t.Title) + '</div>';
+  out += '<div style="font-size:0.78rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap">';
+  out += '<span>🔖 ' + esc(t.TaskID) + '</span>';
+  out += '<span>📅 Deadline: ' + esc(t.Deadline||'—') + '</span>';
+  out += '<span>⚡ ' + esc(t.Priority) + '</span>';
+  out += '<span>📌 ' + esc(t.Status) + '</span>';
+  out += '</div>';
+  if (t.Description) out += '<div style="font-size:0.83rem;color:var(--text-muted);margin-top:8px;line-height:1.5">' + esc(t.Description) + '</div>';
+  out += '</div>';
+
+  out += '<div style="font-weight:700;font-size:0.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);margin-bottom:12px">📋 Worker Submissions</div>';
+
+  var assignments = t.assignments || [];
+  if (!assignments.length) {
+    out += '<div style="color:var(--text-muted);font-size:0.83rem">No workers assigned yet.</div>';
+  }
+
+  assignments.forEach(function(a, idx) {
+    var pct   = a.status==='Done'?100:a.status==='In Progress'?50:a.status==='Overdue'?100:0;
+    var scol  = a.status==='Done'?'var(--success)':a.status==='Overdue'?'var(--error)':a.status==='In Progress'?'var(--navy)':'var(--amber)';
+    var bcol  = a.status==='Done'?'#22c55e':a.status==='Overdue'?'var(--terra)':a.status==='In Progress'?'var(--navy)':'var(--border)';
+    var safeID = (a.assignmentID||'').replace(/[^a-zA-Z0-9_-]/g,'');
+
+    out += '<div style="border:1.5px solid ' + bcol + ';border-radius:10px;padding:14px;margin-bottom:12px">';
+
+    // Header
+    out += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+    out += '<div style="font-weight:600;font-size:0.88rem">' + esc(a.workerName) + '</div>';
+    out += '<span class="badge badge-' + (a.status==='Done'?'done':a.status==='Overdue'?'overdue':a.status==='In Progress'?'progress':'pending') + '">' + esc(a.status) + '</span>';
+    out += '</div>';
+
+    // Progress bar
+    out += '<div class="progress-bar" style="margin-bottom:10px"><div class="progress-fill" style="width:' + pct + '%;background:' + scol + '"></div></div>';
+
+    // Remarks
+    if (a.remarks) {
+      out += '<div style="background:var(--cream);padding:10px;border-radius:8px;margin-bottom:8px">';
+      out += '<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:4px">📝 Progress Notes</div>';
+      out += '<div style="font-size:0.83rem;line-height:1.5">' + esc(a.remarks).replace(/\n/g,'<br>') + '</div>';
+      out += '</div>';
+    } else {
+      out += '<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic;margin-bottom:8px">No remarks submitted yet.</div>';
+    }
+
+    // Attachment
+    if (a.fileURL || a.gDriveLink) {
+      out += '<div style="margin-bottom:8px"><a href="' + esc(a.fileURL||a.gDriveLink) + '" target="_blank" ';
+      out += 'style="display:inline-flex;align-items:center;gap:6px;background:var(--navy-light);color:var(--navy-mid);padding:6px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;text-decoration:none">📎 View Submitted File</a></div>';
+    }
+
+    // Timestamps
+    if (a.completedAt) out += '<div style="font-size:0.72rem;color:var(--success);margin-bottom:4px">✓ Completed: ' + esc(a.completedAt) + '</div>';
+    if (a.updatedAt)   out += '<div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:8px">Last updated: ' + esc(a.updatedAt) + '</div>';
+
+    // Feedback section - use data attributes to avoid quote issues
+    out += '<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">';
+    out += '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin-bottom:6px">💬 Admin Feedback</div>';
+    out += '<textarea id="fb-' + safeID + '" class="form-control" placeholder="Write feedback for ' + esc(a.workerName) + '..." style="min-height:70px;font-size:0.83rem;margin-bottom:8px"></textarea>';
+    out += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+
+    if (a.status === 'Done' || a.status === 'In Progress' || a.status === 'Overdue') {
+      out += '<button class="btn btn-success btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="accept" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">✓ Accept</button>';
+      out += '<button class="btn btn-warn btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="revise" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">↩ Request Revision</button>';
+    }
+    out += '<button class="btn btn-ghost btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="note" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">💬 Send Note</button>';
+    out += '</div>';
+    out += '</div>'; // end feedback
+    out += '</div>'; // end card
+  });
+
+  document.getElementById('taskDetailTitle').textContent = 'Review: ' + t.TaskID;
+  document.getElementById('taskDetailBody').innerHTML = out;
+
+  // Attach click handlers AFTER setting innerHTML (no inline onclick needed)
+  document.querySelectorAll('.task-fb-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var asgnID   = this.getAttribute('data-asgn');
+      var wName    = this.getAttribute('data-worker');
+      var action   = this.getAttribute('data-action');
+      var taskID   = this.getAttribute('data-task');
+      var workerID = this.getAttribute('data-wid');
+      sendTaskFeedback(asgnID, wName, action, taskID, workerID);
+    });
+  });
+
+  // Show Update My Progress if admin is also assigned
+  var myAssignment = assignments.find(function(a){ return a.workerID === USER.accountID; });
+  var updateBtn = document.getElementById('taskDetailUpdateBtn');
+  if (myAssignment && myAssignment.status !== 'Done') {
+    if (updateBtn) {
+      updateBtn.style.display = 'inline-flex';
+      updateBtn.textContent = 'Update My Progress';
+      updateBtn.onclick = function() { closeModal('taskDetailModal'); openMyTaskUpdateModal(t.TaskID, myAssignment); };
+    }
+  } else {
+    if (updateBtn) updateBtn.style.display = 'none';
+  }
+
+  openModal('taskDetailModal');
+}
+
+
+function viewBeneficiary(id) {
+  var b = STATE.beneficiaries.find(function(x){ return x.BeneficiaryID===id; });
+  if (!b) return;
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">' +
+    infoItem('Beneficiary ID', b.BeneficiaryID) + infoItem('Program', b.ProgramType||'—') +
+    infoItem('Full Name', b.FullName) + infoItem('Age / Gender', (b.Age||'—') + ' / ' + (b.Gender||'—')) +
+    infoItem('Address', b.Address||'—') + infoItem('Contact', b.ContactNumber||'—') +
+    infoItem('Assigned Worker', b.AssignedWorkerName||'—') + infoItem('Status', b.Status) +
+    '</div>' +
+    (b.Notes ? '<div style="background:var(--cream);padding:10px;border-radius:8px;font-size:0.82rem;margin-bottom:16px"><strong>Notes:</strong> ' + esc(b.Notes) + '</div>' : '') +
+    '<div style="font-weight:600;font-size:0.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);margin-bottom:10px">Case Log</div>' +
+    '<div id="benLogsContainer"><div class="loading"><span class="spinner-sm"></span></div></div>';
+
+  document.getElementById('benDetailTitle').textContent = b.FullName;
+  document.getElementById('benDetailBody').innerHTML = html;
+  openModal('benDetailModal');
+
+  api('getBeneficiaryLogs', { beneficiaryID: id, requesterID: USER.accountID, requesterRole: USER.role }, function(d) {
+    var logs = d.data || [];
+    var c = document.getElementById('benLogsContainer');
+    if (!c) return;
+    if (logs.length===0) { c.innerHTML='<div style="color:var(--text-muted);font-size:0.82rem">No log entries yet.</div>'; return; }
+    c.innerHTML = logs.map(function(l) {
+      return '<div class="log-entry"><div class="log-dot"></div><div><div class="log-text">' + esc(l.Remarks) + (l.FileURL||l.GDriveLink?'  <a href="'+ esc(l.FileURL||l.GDriveLink) +'" target="_blank" style="color:var(--navy-mid);font-size:0.75rem">📎 Attachment</a>':'') + '</div><div class="log-time">' + esc(l.WorkerName) + ' • ' + esc(l.LogDate) + '</div></div></div>';
+    }).join('');
+  });
+}
+
+function infoItem(label, value) {
+  return '<div style="background:var(--cream);padding:10px;border-radius:8px"><div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:2px">' + label + '</div><div style="font-size:0.85rem;color:var(--text)">' + esc(String(value||'—')) + '</div></div>';
+}
+
+function archiveBeneficiary(id) {
+  showToast('Archiving beneficiary...', '');
+  api('deleteBeneficiary', { benID: id, requestedBy: USER.accountID }, function(d) {
+    if (d.success) { closeModal('benDetailModal'); showToast('Beneficiary archived.', 'success'); loadBeneficiaries(); }
+    else showToast(d.message || 'Archive failed.', 'error');
+  });
+}
+
+// ═══════════════════════════════════════════
+// ORG CHART
+// ═══════════════════════════════════════════
+function loadOrgChart() {
+  api('getOrgChart', {}, function(d) {
+    if (!d.success) return;
+    STATE.orgchart = d.data || [];
+    renderOrgChart();
+  });
+}
+
+function renderOrgChart() {
+  var tbody = document.getElementById('orgTableBody');
+  if (STATE.orgchart.length===0) { tbody.innerHTML='<tr><td colspan="7"><div class="empty-state"><svg viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><rect x="1" y="14" width="6" height="4" rx="1"/><rect x="9" y="14" width="6" height="4" rx="1"/><rect x="17" y="14" width="6" height="4" rx="1"/></svg><p>No org chart entries</p></div></td></tr>'; return; }
+  tbody.innerHTML = STATE.orgchart.map(function(o) {
+    return '<tr>' +
+      '<td style="font-size:0.78rem;color:var(--text-muted)">' + esc(o.OrgID) + '</td>' +
+      '<td><strong>' + esc(o.FullName||'To Be Assigned') + '</strong></td>' +
+      '<td>' + esc(o.Position||'—') + '</td>' +
+      '<td>' + esc(o.Department||'—') + '</td>' +
+      '<td style="text-align:center">' + (o.Level||1) + '</td>' +
+      '<td><span class="badge badge-active">Active</span></td>' +
+      '<td><div class="td-actions">' +
+        '<button class="btn btn-ghost btn-sm" onclick="editOrgEntry(\'' + o.OrgID + '\')">Edit</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteOrgEntry(\'' + o.OrgID + '\')">Archive</button>' +
+      '</div></td></tr>';
+  }).join('');
+}
+
+function openOrgModal() {
+  document.getElementById('org-id').value='';
+  ['org-name','org-position','org-department','org-supervisor','org-photo'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('org-level').value=1;
+  document.getElementById('org-order').value=0;
+  document.getElementById('orgModalTitle').textContent='Add Position';
+  openModal('orgModal');
+}
+
+function editOrgEntry(id) {
+  var o = STATE.orgchart.find(function(x){ return x.OrgID===id; });
+  if (!o) return;
+  document.getElementById('org-id').value=o.OrgID;
+  document.getElementById('org-name').value=o.FullName||'';
+  document.getElementById('org-position').value=o.Position||'';
+  document.getElementById('org-department').value=o.Department||'';
+  document.getElementById('org-supervisor').value=o.SupervisorOrgID||'';
+  document.getElementById('org-level').value=o.Level||1;
+  document.getElementById('org-photo').value=o.PhotoURL||'';
+  document.getElementById('org-order').value=o.DisplayOrder||0;
+  document.getElementById('orgModalTitle').textContent='Edit Position';
+  openModal('orgModal');
+}
+
+function saveOrgEntry() {
+  var position = document.getElementById('org-position').value.trim();
+  if (!position) { showToast('Position is required.','error'); return; }
+  var orgBtn = document.querySelector('#orgModal .btn-primary');
+  if (orgBtn) { orgBtn.disabled=true; orgBtn.textContent='Saving...'; }
+  api('saveOrgEntry', {
+    orgID: document.getElementById('org-id').value||null,
+    fullName: document.getElementById('org-name').value.trim(),
+    position: position,
+    department: document.getElementById('org-department').value.trim(),
+    supervisorOrgID: document.getElementById('org-supervisor').value.trim(),
+    level: parseInt(document.getElementById('org-level').value)||1,
+    photoURL: document.getElementById('org-photo').value.trim(),
+    displayOrder: parseInt(document.getElementById('org-order').value)||0,
+    savedBy: USER.accountID
+  }, function(d) {
+    if (orgBtn) { orgBtn.disabled=false; orgBtn.textContent='Save'; }
+    if (d.success) { closeModal('orgModal'); showToast('Org entry saved.', 'success'); loadOrgChart(); }
+    else showToast(d.message || 'Save failed.', 'error');
+  });
+}
+
+function deleteOrgEntry(id) {
+  showToast('Archiving org entry...', '');
+  api('deleteOrgEntry', { orgID: id, requestedBy: USER.accountID }, function(d) {
+    if (d.success) { showToast('Org entry archived.', 'success'); loadOrgChart(); }
+    else showToast(d.message || 'Archive failed.', 'error');
+  });
+}
+
+// ═══════════════════════════════════════════
+// PROGRAMS
+// ═══════════════════════════════════════════
+function loadPrograms() {
+  api('getProgramTypes', {}, function(d) {
+    if (!d.success) return;
+    // getProgramTypes only returns Active — we need all for admin; handled below
+    loadAllPrograms();
+  });
+}
+
+function loadAllPrograms() {
+  api('getAllProgramTypes', {}, function(d) {
+    if (d.success && d.data) {
+      STATE.programs = d.data;
+    } else {
+      // fallback: getProgramTypes only returns Active
+      STATE.programs = d.data || [];
+    }
+    renderPrograms();
+    var cnt = STATE.programs.filter(function(p){ return p.Status==='Pending'; }).length;
+    var badge = document.getElementById('pendingProgBadge');
+    if (cnt>0) { badge.textContent=cnt; badge.style.display='inline-flex'; }
+    else badge.style.display='none';
+  });
+}
+
+function renderPrograms() {
+  var data = STATE.programs.filter(function(p){ return p.Status===STATE.progFilter; });
+  var tbody = document.getElementById('programsTableBody');
+  if (data.length===0) { tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>No programs with status: ' + STATE.progFilter + '</p></div></td></tr>'; return; }
+  tbody.innerHTML = data.map(function(p) {
+    return '<tr>' +
+      '<td style="font-size:0.78rem;color:var(--text-muted)">' + esc(p.ProgramTypeID) + '</td>' +
+      '<td><strong>' + esc(p.ProgramName) + '</strong></td>' +
+      '<td style="font-size:0.82rem;color:var(--text-muted)">' + esc(p.Description||'—') + '</td>' +
+      '<td><span class="badge badge-' + (p.Status==='Active'?'active':p.Status==='Pending'?'pending':'inactive') + '">' + p.Status + '</span></td>' +
+      '<td>' + esc(p.SuggestedBy||'Admin') + '</td>' +
+      '<td><div class="td-actions">' +
+        (p.Status==='Pending'?'<button class="btn btn-primary btn-sm" onclick="actProgram(\'' + p.ProgramTypeID + '\',\'approve\')">Approve</button><button class="btn btn-danger btn-sm" onclick="actProgram(\'' + p.ProgramTypeID + '\',\'reject\')">Reject</button>':'') +
+        (p.Status==='Active'?'<button class="btn btn-danger btn-sm" onclick="actProgram(\'' + p.ProgramTypeID + '\',\'archive\')">Archive</button>':'') +
+      '</div></td></tr>';
+  }).join('');
+}
+
+function filterPrograms(status, btn) {
+  STATE.progFilter = status;
+  document.querySelectorAll('#panel-programs .tab').forEach(function(t){ t.classList.remove('active'); });
+  btn.classList.add('active');
+  renderPrograms();
+}
+
+function openProgramModal() {
+  document.getElementById('prog-name').value='';
+  document.getElementById('prog-desc').value='';
+  openModal('programModal');
+}
+
+function saveProgramType() {
+  var name = document.getElementById('prog-name').value.trim();
+  if (!name) { showToast('Program name is required.','error'); return; }
+  api('saveProgramType', {
+    progID: null, action: 'approve', approvedBy: USER.accountID,
+    programName: name, description: document.getElementById('prog-desc').value.trim(),
+    suggestedBy: USER.accountID
+  }, function(d) {
+    // Use suggest then auto-approve
+    api('suggestProgramType', { programName: name, description: document.getElementById('prog-desc').value.trim(), suggestedBy: 'Admin:' + USER.accountID }, function(sd) {
+      if (sd.success) {
+        api('saveProgramType', { progID: sd.data.progID, action: 'approve', approvedBy: USER.accountID }, function() {
+          closeModal('programModal'); showToast('Program type added.','success'); loadAllPrograms();
+        });
+      }
+    });
+  });
+}
+
+function actProgram(id, action) {
+  api('saveProgramType', { progID: id, action: action, approvedBy: USER.accountID }, function(d) {
+    showToast(d.success?'Done.':d.message, d.success?'success':'error');
+    if (d.success) loadAllPrograms();
+  });
+}
+
+// ═══════════════════════════════════════════
+// PASSWORD RESETS
+// ═══════════════════════════════════════════
+function loadResets() {
+  // PasswordResets sheet — we read via accounts since no direct endpoint for admin yet
+  // Show placeholder until Phase 3
+  document.getElementById('resetsTableBody').innerHTML = '<tr><td colspan="5"><div class="empty-state"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><p>Password reset requests will appear here.<br>Workers can request resets from the login page.</p></div></td></tr>';
+}
+
+// ═══════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════
+function updateDashboardStats() {
+  var workers = STATE.accounts.filter(function(a){ return a.Role==='worker' && a.Status==='Active'; }).length;
+  var openTasks = STATE.tasks.filter(function(t){ return t.Status==='Open'; }).length;
+  var overdue = STATE.tasks.filter(function(t){ return t.assignments && t.assignments.some(function(a){ return a.status==='Overdue'; }); }).length;
+  var bens = STATE.beneficiaries.filter(function(b){ return b.Status==='Active'; }).length;
+  document.getElementById('stat-workers').textContent = workers;
+  document.getElementById('stat-tasks').textContent = openTasks;
+  document.getElementById('stat-overdue').textContent = overdue;
+  document.getElementById('stat-beneficiaries').textContent = bens;
+  renderDashboard();
+}
+
+function renderDashboard() {
+  // Recent announcements
+  var annHtml = STATE.announcements.slice(0,3).map(function(a) {
+    return '<div class="log-entry"><div class="log-dot" style="background:' + (a.Priority==='Urgent'?'var(--terra)':'var(--navy-mid)') + '"></div><div><div class="log-text">' + esc(a.Title) + '</div><div class="log-time">' + esc(a.PostedAt) + ' • ' + a.Priority + '</div></div></div>';
+  }).join('');
+  document.getElementById('dashAnnouncements').innerHTML = annHtml || '<div style="color:var(--text-muted);font-size:0.82rem">No announcements yet.</div>';
+
+  // Pending items
+  var overdueWorkers = [];
+  STATE.tasks.forEach(function(t) {
+    (t.assignments||[]).filter(function(a){ return a.status==='Overdue'; }).forEach(function(a) {
+      overdueWorkers.push({ worker: a.workerName, task: t.Title });
+    });
+  });
+  var pendingHtml = '';
+  if (overdueWorkers.length > 0) {
+    pendingHtml += '<div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--error);margin-bottom:8px">Overdue Tasks</div>';
+    overdueWorkers.slice(0,5).forEach(function(x) {
+      pendingHtml += '<div class="log-entry"><div class="log-dot" style="background:var(--error)"></div><div><div class="log-text">' + esc(x.task) + '</div><div class="log-time">' + esc(x.worker) + '</div></div></div>';
+    });
+  } else {
+    pendingHtml = '<div style="color:var(--text-muted);font-size:0.82rem">✓ No overdue tasks.</div>';
+  }
+  document.getElementById('dashPending').innerHTML = pendingHtml;
+}
+
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+
+// Generic button loading state
+function setBtnLoading(btnId, loading, label) {
+  var btn = document.getElementById(btnId);
+  if (!btn) return;
+  if (loading) {
+    btn.disabled = true;
+    btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.4);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;margin-right:6px"></span>' + label;
+  } else {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+// Show inline alert inside modals
+function showAlert(elId, textElId, msg) {
+  var el = document.getElementById(elId);
+  var tx = document.getElementById(textElId);
+  if (tx) tx.textContent = msg;
+  if (el) el.classList.add('show');
+}
+function hideAlert(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.remove('show');
+}
+
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showAlert(id, msg) {
+  var el = document.getElementById(id);
+  var tx = document.getElementById(id+'Text');
+  if (tx) tx.textContent = msg;
+  el.classList.add('show');
+}
+function hideAlert(id) { document.getElementById(id).classList.remove('show'); }
+
+function doLogout() {
+  sessionStorage.removeItem('iic_user');
+  sessionStorage.removeItem('iic_api');
+  window.location.href = 'login.html';
+}
+
+// ═══════════════════════════════════════════
+// EXPORT SYSTEM
+// ═══════════════════════════════════════════
+var EXPORT = {
+  type: 'beneficiaries',
+  format: 'excel',
+  filters: {}
+};
+
+function openExportModal() {
+  EXPORT.type = 'beneficiaries';
+  EXPORT.format = 'excel';
+  EXPORT.filters = {};
+  updateExportCards();
+  updateExportFilters();
+  document.getElementById('exportStep1').style.display = 'block';
+  document.getElementById('exportProgress').classList.remove('show');
+  document.getElementById('exportModalFooter').style.display = 'flex';
+  openModal('exportModal');
+}
+
+function selectExportType(type) {
+  EXPORT.type = type;
+  updateExportCards();
+  updateExportFilters();
+}
+
+function selectFormat(fmt) {
+  EXPORT.format = fmt;
+  ['excel','pdf'].forEach(function(f) {
+    var c = document.getElementById('fmtCard-' + f);
+    if (c) c.classList.toggle('selected', f === fmt);
+  });
+}
+
+function updateExportCards() {
+  ['beneficiaries','tasks','accounts','orgchart'].forEach(function(t) {
+    var c = document.getElementById('exportCard-' + t);
+    if (c) c.classList.toggle('selected', t === EXPORT.type);
+  });
+}
+
+function updateExportFilters() {
+  var container = document.getElementById('exportFilters');
+  var html = '';
+
+  if (EXPORT.type === 'beneficiaries') {
+    // Get unique program types from data
+    var programs = [...new Set(STATE.beneficiaries.map(function(b){ return b.ProgramType; }).filter(Boolean))];
+    var workers  = [...new Set(STATE.beneficiaries.map(function(b){ return b.AssignedWorkerName; }).filter(Boolean))];
+    html = '<div class="export-filter-row">' +
+      '<div class="form-group"><label class="form-label">Program Type</label>' +
+      '<select class="form-control" id="ef-program"><option value="">All Programs</option>' +
+      programs.map(function(p){ return '<option>' + esc(p) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Status</label>' +
+      '<select class="form-control" id="ef-status"><option value="">All Statuses</option>' +
+      '<option>Active</option><option>Completed</option><option>Transferred</option></select></div>' +
+      '</div>' +
+      '<div class="export-filter-row">' +
+      '<div class="form-group"><label class="form-label">Assigned Worker</label>' +
+      '<select class="form-control" id="ef-worker"><option value="">All Workers</option>' +
+      workers.map(function(w){ return '<option>' + esc(w) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="form-group"><label class="form-label">Date From</label>' +
+      '<input type="date" class="form-control" id="ef-datefrom" /></div>' +
+      '</div>';
+
+  } else if (EXPORT.type === 'tasks') {
+    html = '<div class="export-filter-row">' +
+      '<div class="form-group"><label class="form-label">Status</label>' +
+      '<select class="form-control" id="ef-taskstatus"><option value="">All Statuses</option>' +
+      '<option>Open</option><option>Closed</option><option>Overdue</option></select></div>' +
+      '<div class="form-group"><label class="form-label">Priority</label>' +
+      '<select class="form-control" id="ef-priority"><option value="">All Priorities</option>' +
+      '<option>Normal</option><option>Urgent</option></select></div>' +
+      '</div>' +
+      '<div class="export-filter-row">' +
+      '<div class="form-group"><label class="form-label">Deadline From</label>' +
+      '<input type="date" class="form-control" id="ef-deadlinefrom" /></div>' +
+      '<div class="form-group"><label class="form-label">Deadline To</label>' +
+      '<input type="date" class="form-control" id="ef-deadlineto" /></div>' +
+      '</div>';
+
+  } else if (EXPORT.type === 'accounts') {
+    html = '<div class="export-filter-row">' +
+      '<div class="form-group"><label class="form-label">Role</label>' +
+      '<select class="form-control" id="ef-role"><option value="">All Roles</option>' +
+      '<option value="superadmin">Super Admin</option><option value="admin">Admin</option><option value="worker">Worker</option></select></div>' +
+      '<div class="form-group"><label class="form-label">Status</label>' +
+      '<select class="form-control" id="ef-accstatus"><option value="">All Statuses</option>' +
+      '<option>Active</option><option>Inactive</option></select></div>' +
+      '</div>';
+
+  } else if (EXPORT.type === 'orgchart') {
+    html = '<div class="form-group"><label class="form-label">Department</label>' +
+      '<select class="form-control" id="ef-dept"><option value="">All Departments</option>' +
+      [...new Set(STATE.orgchart.map(function(o){ return o.Department; }).filter(Boolean))].map(function(d){ return '<option>' + esc(d) + '</option>'; }).join('') +
+      '</select></div>';
+  }
+
+  container.innerHTML = html || '<div style="color:var(--text-muted);font-size:0.82rem">No filters available for this type.</div>';
+}
+
+function getFilteredData() {
+  var data = [];
+
+  if (EXPORT.type === 'beneficiaries') {
+    var prog   = (document.getElementById('ef-program')  || {}).value || '';
+    var status = (document.getElementById('ef-status')   || {}).value || '';
+    var worker = (document.getElementById('ef-worker')   || {}).value || '';
+    var dfrom  = (document.getElementById('ef-datefrom') || {}).value || '';
+    data = STATE.beneficiaries.filter(function(b) {
+      if (prog   && b.ProgramType         !== prog)   return false;
+      if (status && b.Status              !== status) return false;
+      if (worker && b.AssignedWorkerName  !== worker) return false;
+      if (dfrom  && b.DateRegistered && b.DateRegistered < dfrom) return false;
+      return true;
+    });
+
+  } else if (EXPORT.type === 'tasks') {
+    var ts  = (document.getElementById('ef-taskstatus')   || {}).value || '';
+    var pr  = (document.getElementById('ef-priority')     || {}).value || '';
+    var df  = (document.getElementById('ef-deadlinefrom') || {}).value || '';
+    var dt  = (document.getElementById('ef-deadlineto')   || {}).value || '';
+    data = STATE.tasks.filter(function(t) {
+      if (t.Status === 'Archived') return false;
+      if (ts && t.Status   !== ts) return false;
+      if (pr && t.Priority !== pr) return false;
+      if (df && t.Deadline && t.Deadline < df) return false;
+      if (dt && t.Deadline && t.Deadline > dt) return false;
+      return true;
+    });
+
+  } else if (EXPORT.type === 'accounts') {
+    var rl  = (document.getElementById('ef-role')      || {}).value || '';
+    var ast = (document.getElementById('ef-accstatus') || {}).value || '';
+    data = STATE.accounts.filter(function(a) {
+      if (rl  && a.Role   !== rl)  return false;
+      if (ast && a.Status !== ast) return false;
+      return true;
+    });
+
+  } else if (EXPORT.type === 'orgchart') {
+    var dept = (document.getElementById('ef-dept') || {}).value || '';
+    data = STATE.orgchart.filter(function(o) {
+      if (dept && o.Department !== dept) return false;
+      return true;
+    });
+  }
+
+  return data;
+}
+
+function runExport() {
+  var data = getFilteredData();
+  if (!data || data.length === 0) {
+    showToast('No data found for the selected filters.', 'error');
+    return;
+  }
+
+  // Show progress
+  document.getElementById('exportStep1').style.display = 'none';
+  document.getElementById('exportModalFooter').style.display = 'none';
+  document.getElementById('exportProgress').classList.add('show');
+
+  var msgEl = document.getElementById('exportProgressMsg');
+  msgEl.textContent = 'Preparing ' + data.length + ' records…';
+
+  setTimeout(function() {
+    try {
+      if (EXPORT.format === 'excel') {
+        exportToExcel(data);
+      } else {
+        exportToPDF(data);
+      }
+      closeModal('exportModal');
+      showToast('Export downloaded successfully!', 'success');
+    } catch(e) {
+      showToast('Export failed: ' + e.message, 'error');
+      document.getElementById('exportStep1').style.display = 'block';
+      document.getElementById('exportModalFooter').style.display = 'flex';
+      document.getElementById('exportProgress').classList.remove('show');
+    }
+  }, 400);
+}
+
+// ── EXCEL EXPORT ──
+function exportToExcel(data) {
+  var wb = XLSX.utils.book_new();
+  var timestamp = new Date().toLocaleDateString('en-PH');
+  var orgName   = 'Ina-Inakay Center Inc.';
+
+  if (EXPORT.type === 'beneficiaries') {
+    var rows = [
+      [orgName],
+      ['Beneficiary Records — Exported: ' + timestamp],
+      [],
+      ['ID','Full Name','Age','Gender','Address','Contact','Program','Assigned Worker','Status','Date Registered','Notes','Duplicate Flag']
+    ];
+    data.forEach(function(b) {
+      rows.push([
+        b.BeneficiaryID, b.FullName, b.Age, b.Gender, b.Address,
+        b.ContactNumber, b.ProgramType, b.AssignedWorkerName,
+        b.Status, b.DateRegistered, b.Notes,
+        b.DuplicateFlag === 'TRUE' ? 'Yes' : 'No'
+      ]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    styleExcelSheet(ws, rows[3].length);
+    XLSX.utils.book_append_sheet(wb, ws, 'Beneficiaries');
+
+  } else if (EXPORT.type === 'tasks') {
+    var rows = [
+      [orgName],
+      ['Task Report — Exported: ' + timestamp],
+      [],
+      ['Task ID','Title','Description','Priority','Status','Deadline','Created By','Created At','Assigned Workers','Worker Statuses']
+    ];
+    data.forEach(function(t) {
+      var workers  = (t.assignments||[]).map(function(a){ return a.workerName; }).join(', ');
+      var statuses = (t.assignments||[]).map(function(a){ return a.workerName + ': ' + a.status; }).join(' | ');
+      rows.push([
+        t.TaskID, t.Title, t.Description, t.Priority,
+        t.Status, t.Deadline, t.CreatedBy, t.CreatedAt,
+        workers, statuses
+      ]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    styleExcelSheet(ws, rows[3].length);
+    XLSX.utils.book_append_sheet(wb, ws, 'Tasks');
+
+  } else if (EXPORT.type === 'accounts') {
+    var rows = [
+      [orgName],
+      ['Staff Accounts — Exported: ' + timestamp],
+      [],
+      ['Account ID','Full Name','Username','Role','Position','Department','Email','Contact','Date Hired','Status','Tags']
+    ];
+    data.forEach(function(a) {
+      rows.push([
+        a.AccountID, a.FullName, a.Username, a.Role,
+        a.Position, a.Department, a.Email,
+        a.ContactNumber, a.DateHired, a.Status, a.Tags
+      ]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    styleExcelSheet(ws, rows[3].length);
+    XLSX.utils.book_append_sheet(wb, ws, 'Accounts');
+
+  } else if (EXPORT.type === 'orgchart') {
+    var rows = [
+      [orgName],
+      ['Org Chart — Exported: ' + timestamp],
+      [],
+      ['Org ID','Full Name','Position','Department','Level','Supervisor Org ID','Display Order','Status']
+    ];
+    data.forEach(function(o) {
+      rows.push([
+        o.OrgID, o.FullName || 'To Be Assigned', o.Position,
+        o.Department, o.Level, o.SupervisorOrgID,
+        o.DisplayOrder, o.Status
+      ]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    styleExcelSheet(ws, rows[3].length);
+    XLSX.utils.book_append_sheet(wb, ws, 'OrgChart');
+  }
+
+  // Set column widths
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  if (ws['!cols']) {} else {
+    ws['!cols'] = Array(20).fill({ wch: 20 });
+  }
+
+  var filename = 'IIC_' + EXPORT.type + '_' + new Date().toISOString().slice(0,10) + '.xlsx';
+  XLSX.writeFile(wb, filename);
+}
+
+function styleExcelSheet(ws, colCount) {
+  // Title rows styling via merge
+  ws['!merges'] = [
+    { s:{r:0,c:0}, e:{r:0,c:colCount-1} },
+    { s:{r:1,c:0}, e:{r:1,c:colCount-1} }
+  ];
+  // Column widths
+  ws['!cols'] = Array(colCount).fill(null).map(function(){ return { wch: 22 }; });
+}
+
+// ── PDF EXPORT ──
+function exportToPDF(data) {
+  var { jsPDF } = window.jspdf;
+  var doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  var timestamp = new Date().toLocaleDateString('en-PH');
+  var titleMap = {
+    beneficiaries: 'Beneficiary Records',
+    tasks: 'Task Report',
+    accounts: 'Staff Accounts',
+    orgchart: 'Organizational Chart Data'
+  };
+
+  // Header
+  doc.setFillColor(18, 36, 64); // navy-dark
+  doc.rect(0, 0, 297, 22, 'F');
+  doc.setTextColor(248, 244, 238);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Ina-Inakay Center Inc.  —  ' + titleMap[EXPORT.type], 14, 10);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Exported: ' + timestamp + '  |  Records: ' + data.length, 14, 17);
+
+  // Accent bar
+  doc.setFillColor(192, 85, 42); // terra
+  doc.rect(0, 22, 100, 2, 'F');
+  doc.setFillColor(212, 131, 42); // amber
+  doc.rect(100, 22, 100, 2, 'F');
+  doc.setFillColor(122, 155, 181); // steel
+  doc.rect(200, 22, 97, 2, 'F');
+
+  var head = [];
+  var body = [];
+
+  if (EXPORT.type === 'beneficiaries') {
+    head = [['ID','Full Name','Age','Gender','Program Type','Assigned Worker','Status','Date Registered']];
+    body = data.map(function(b) {
+      return [b.BeneficiaryID, b.FullName, b.Age||'—', b.Gender||'—', b.ProgramType||'—', b.AssignedWorkerName||'—', b.Status, b.DateRegistered||'—'];
+    });
+  } else if (EXPORT.type === 'tasks') {
+    head = [['Task ID','Title','Priority','Status','Deadline','Assigned Workers']];
+    body = data.map(function(t) {
+      var workers = (t.assignments||[]).map(function(a){ return a.workerName + ' ['+a.status+']'; }).join(', ');
+      return [t.TaskID, t.Title, t.Priority, t.Status, t.Deadline||'—', workers||'—'];
+    });
+  } else if (EXPORT.type === 'accounts') {
+    head = [['Account ID','Full Name','Username','Role','Position','Department','Status']];
+    body = data.map(function(a) {
+      return [a.AccountID, a.FullName, a.Username, a.Role, a.Position||'—', a.Department||'—', a.Status];
+    });
+  } else if (EXPORT.type === 'orgchart') {
+    head = [['Org ID','Full Name','Position','Department','Level','Status']];
+    body = data.map(function(o) {
+      return [o.OrgID, o.FullName||'To Be Assigned', o.Position||'—', o.Department||'—', o.Level||1, o.Status];
+    });
+  }
+
+  doc.autoTable({
+    head: head,
+    body: body,
+    startY: 28,
+    styles: {
+      font: 'helvetica', fontSize: 8,
+      cellPadding: 3, overflow: 'linebreak',
+      textColor: [26, 26, 46]
+    },
+    headStyles: {
+      fillColor: [30, 58, 95],
+      textColor: [248, 244, 238],
+      fontStyle: 'bold', fontSize: 8
+    },
+    alternateRowStyles: { fillColor: [248, 244, 238] },
+    columnStyles: { 0: { cellWidth: 28 } },
+    margin: { left: 14, right: 14 },
+    didDrawPage: function(data) {
+      // Footer on each page
+      doc.setFontSize(7);
+      doc.setTextColor(107, 114, 128);
+      doc.text(
+        'Ina-Inakay Center Inc.  |  Page ' + data.pageNumber + '  |  Confidential',
+        14, doc.internal.pageSize.height - 6
+      );
+    }
+  });
+
+  var filename = 'IIC_' + EXPORT.type + '_' + new Date().toISOString().slice(0,10) + '.pdf';
+  doc.save(filename);
+}
+
+// ═══════════════════════════════════════════
+// FORCE RESET PASSWORD (Admin/SuperAdmin)
+// ═══════════════════════════════════════════
+function openResetPwModal(accountID, fullName) {
+  document.getElementById('rpw-accountID').value = accountID;
+  document.getElementById('rpw-name').textContent = fullName;
+  document.getElementById('rpw-new').value = '';
+  document.getElementById('rpw-confirm').value = '';
+  hideAlert('rpwError');
+  hideAlert('rpwSuccess');
+  document.getElementById('rpwSaveBtn').disabled = false;
+  document.getElementById('rpwSaveBtn').textContent = 'Set New Password';
+  openModal('resetPwModal');
+}
+
+function saveForceReset() {
+  var accountID = document.getElementById('rpw-accountID').value;
+  var newPw     = document.getElementById('rpw-new').value;
+  var confirm   = document.getElementById('rpw-confirm').value;
+
+  hideAlert('rpwError');
+  hideAlert('rpwSuccess');
+
+  if (!newPw)          { showAlert('rpwError','rpwErrorText','New password is required.'); return; }
+  if (newPw.length < 6){ showAlert('rpwError','rpwErrorText','Password must be at least 6 characters.'); return; }
+  if (newPw !== confirm){ showAlert('rpwError','rpwErrorText','Passwords do not match.'); return; }
+
+  setBtnLoading('rpwSaveBtn', true, 'Saving...');
+
+  // Use updateAccount with new password field
+  api('forceResetPassword', {
+    accountID: accountID,
+    newPassword: newPw,
+    requestedBy: USER.accountID
+  }, function(d) {
+    setBtnLoading('rpwSaveBtn', false, 'Set New Password');
+    if (d.success) {
+      showAlert('rpwSuccess', 'rpwSuccessText', 'Password updated successfully! The worker can now log in with the new password.');
+      document.getElementById('rpw-new').value = '';
+      document.getElementById('rpw-confirm').value = '';
+    } else {
+      showAlert('rpwError', 'rpwErrorText', d.message || 'Failed to reset password. Please try again.');
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
+// ADMIN/SUPERADMIN TASK ASSIGNMENT UPDATE
+// ═══════════════════════════════════════════
+function openMyTaskUpdateModal(taskID, assignment) {
+  // Reuse the existing task detail modal but show update form
+  var t = STATE.tasks.find(function(x){ return x.TaskID === taskID; });
+  if (!t || !assignment) return;
+
+  // Build update form inside the detail modal
+  var html = '<div style="background:var(--cream);padding:12px;border-radius:8px;margin-bottom:14px">' +
+    '<strong>' + esc(t.Title) + '</strong><br>' +
+    '<span style="font-size:0.78rem;color:var(--text-muted)">Deadline: ' + esc(t.Deadline||'—') + ' • Your current status: <strong>' + esc(assignment.status) + '</strong></span>' +
+    '</div>' +
+    '<div class="form-group"><label class="form-label">Update Status</label>' +
+    '<select class="form-control" id="atm-status">' +
+    '<option value="Pending"' + (assignment.status==='Pending'?' selected':'') + '>Pending</option>' +
+    '<option value="In Progress"' + (assignment.status==='In Progress'?' selected':'') + '>In Progress</option>' +
+    '<option value="Done"' + (assignment.status==='Done'?' selected':'') + '>Done</option>' +
+    '</select></div>' +
+    '<div class="form-group"><label class="form-label">Remarks</label>' +
+    '<textarea class="form-control" id="atm-remarks" placeholder="Add your progress notes...">' + esc(assignment.remarks||'') + '</textarea></div>' +
+    '<div class="form-group"><label class="form-label">GDrive Link (optional)</label>' +
+    '<input class="form-control" id="atm-gdrive" value="' + esc(assignment.gDriveLink||'') + '" placeholder="https://drive.google.com/..." />' +
+    '<div class="form-hint">Set sharing to Anyone with the link</div></div>';
+
+  document.getElementById('taskDetailTitle').textContent = 'Update My Progress';
+  document.getElementById('taskDetailBody').innerHTML = html;
+
+  // Change footer button
+  var updateBtn = document.getElementById('taskDetailUpdateBtn');
+  if (updateBtn) {
+    updateBtn.textContent = 'Save My Update';
+    updateBtn.onclick = function() { saveMyTaskUpdate(assignment.assignmentID); };
+  }
+  openModal('taskDetailModal');
+}
+
+function saveMyTaskUpdate(assignmentID) {
+  var status  = document.getElementById('atm-status').value;
+  var remarks = document.getElementById('atm-remarks').value.trim();
+  var gdrive  = document.getElementById('atm-gdrive').value.trim();
+
+  var btn = document.getElementById('taskDetailUpdateBtn');
+  if (btn) { btn.disabled=true; btn.textContent='Saving...'; }
+
+  api('updateTaskAssignment', {
+    assignmentID: assignmentID,
+    workerID: USER.accountID,
+    status: status, remarks: remarks, gDriveLink: gdrive
+  }, function(d) {
+    if (btn) { btn.disabled=false; btn.textContent='Save My Update'; }
+    if (d.success) {
+      closeModal('taskDetailModal');
+      showToast('Progress updated successfully!', 'success');
+      loadTasks();
+    } else {
+      showToast(d.message || 'Update failed. Please try again.', 'error');
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
+// TASK FEEDBACK SYSTEM
+// ═══════════════════════════════════════════
+function sendTaskFeedback(assignmentID, workerName, action, taskID, workerID) {
+  var feedbackEl = document.getElementById('feedback-' + assignmentID);
+  var feedbackText = feedbackEl ? feedbackEl.value.trim() : '';
+
+  // For accept/revise, feedback is optional but recommended
+  // For note, feedback is required
+  if (action === 'note' && !feedbackText) {
+    showToast('Please write a note before sending.', 'error');
+    return;
+  }
+
+  var task = STATE.tasks.find(function(t){ return t.TaskID === taskID; });
+  var taskTitle = task ? task.Title : taskID;
+  var assignment = (task ? task.assignments || [] : []).find(function(a){ return a.assignmentID === assignmentID; });
+  workerID = workerID || (assignment ? assignment.workerID : null);
+
+  var actionLabels = { accept: 'accepted', revise: 'revision requested', note: 'note sent' };
+  var newStatus = null;
+
+  // Accept = mark as Done if not already
+  if (action === 'accept' && assignment && assignment.status !== 'Done') {
+    newStatus = 'Done';
+  }
+  // Revise = reset back to In Progress
+  if (action === 'revise') {
+    newStatus = 'In Progress';
+  }
+
+  // Build the feedback message
+  var prefix = action === 'accept' ? '[✓ ACCEPTED]' : action === 'revise' ? '[↩ REVISION NEEDED]' : '[💬 NOTE]';
+  var adminName = USER.fullName || USER.username;
+  var fullFeedback = prefix + ' from ' + adminName + ': ' + (feedbackText || (action === 'accept' ? 'Your submission has been accepted.' : 'Please revise your submission.'));
+
+  // Build notification message for worker
+  var notifMsg = action === 'accept'
+    ? 'Your task "' + taskTitle + '" has been ACCEPTED by ' + adminName + (feedbackText ? ': ' + feedbackText : '.')
+    : action === 'revise'
+    ? 'REVISION NEEDED on task "' + taskTitle + '" from ' + adminName + ': ' + (feedbackText || 'Please revise your submission.')
+    : 'Note from ' + adminName + ' on task "' + taskTitle + '": ' + feedbackText;
+
+  // Prepare payload
+  var payload = {
+    assignmentID: assignmentID,
+    workerID: workerID || USER.accountID,
+    remarks: (assignment && assignment.remarks ? (assignment.remarks + '\n\n') : '') + fullFeedback,
+
+
+    gDriveLink: assignment ? (assignment.gDriveLink || '') : ''
+  };
+  if (newStatus) payload.status = newStatus;
+
+  // Disable all feedback buttons in this card while saving
+  var btns = document.querySelectorAll('[onclick*="' + assignmentID + '"]');
+  btns.forEach(function(b){ b.disabled = true; });
+
+  showToast('Sending feedback...', '');
+
+  api('updateTaskAssignment', payload, function(d) {
+    btns.forEach(function(b){ b.disabled = false; });
+    if (d.success) {
+      // Send in-app notification to the worker
+      if (workerID) {
+        api('createNotification', {
+          recipientAccountID: workerID,
+          type: 'TaskFeedback',
+          referenceID: taskID,
+          message: notifMsg
+        }, function(){});
+      }
+
+      var successMsg = action === 'accept' ? 'Submission accepted!' : action === 'revise' ? 'Revision requested.' : 'Note sent.';
+      showToast(successMsg, action === 'accept' ? 'success' : '');
+
+      // Clear the feedback textarea
+      if (feedbackEl) feedbackEl.value = '';
+
+      // Reload tasks and reopen the modal
+      loadTasks();
+      setTimeout(function(){ viewTask(taskID); }, 800);
+    } else {
+      showToast(d.message || 'Failed to send feedback.', 'error');
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
+// ANNOUNCEMENTS
+// ═══════════════════════════════════════════
+function openAnnouncementModal(annID) {
+  STATE.editAnnID = annID || null;
+  var isEdit = !!annID;
+  document.getElementById('annModalTitle').textContent = isEdit ? 'Edit Announcement' : 'New Announcement';
+  document.getElementById('ann-title').value = '';
+  document.getElementById('ann-body').value = '';
+  document.getElementById('ann-priority').value = 'Normal';
+  document.getElementById('ann-language').value = 'BOTH';
+  document.getElementById('ann-pin').checked = false;
+  document.getElementById('ann-gdrive').value = '';
+  document.getElementById('ann-file').value = '';
+  STATE.annAttachType = 'file';
+  document.getElementById('ann-file').style.display = 'block';
+  document.getElementById('ann-gdrive').style.display = 'none';
+  document.getElementById('attachTypeBtn').textContent = 'Switch to GDrive Link';
+  if (isEdit) {
+    var a = STATE.announcements.find(function(x){ return x.AnnouncementID === annID; });
+    if (a) {
+      document.getElementById('ann-title').value    = a.Title || '';
+      document.getElementById('ann-body').value     = a.Body  || '';
+      document.getElementById('ann-priority').value = a.Priority || 'Normal';
+      document.getElementById('ann-language').value = a.Language || 'BOTH';
+      document.getElementById('ann-pin').checked    = a.Pinned === 'TRUE';
+    }
+  }
+  document.getElementById('annSaveBtn').disabled = false;
+  document.getElementById('annSaveBtn').textContent = isEdit ? 'Save Changes' : 'Post Announcement';
+  openModal('announcementModal');
+}
+
+function toggleAttachType() {
+  if (STATE.annAttachType === 'file') {
+    STATE.annAttachType = 'gdrive';
+    document.getElementById('ann-file').style.display  = 'none';
+    document.getElementById('ann-gdrive').style.display = 'block';
+    document.getElementById('attachTypeBtn').textContent = 'Switch to File Upload';
+  } else {
+    STATE.annAttachType = 'file';
+    document.getElementById('ann-file').style.display  = 'block';
+    document.getElementById('ann-gdrive').style.display = 'none';
+    document.getElementById('attachTypeBtn').textContent = 'Switch to GDrive Link';
+  }
+}
+
+function saveAnnouncement() {
+  var title = document.getElementById('ann-title').value.trim();
+  var body  = document.getElementById('ann-body').value.trim();
+  if (!title || !body) { showToast('Title and body are required.', 'error'); return; }
+  var btn = document.getElementById('annSaveBtn');
+  btn.disabled = true; btn.textContent = 'Posting…';
+  var payload = {
+    postedBy: USER.accountID,
+    title:    title,
+    body:     body,
+    priority: document.getElementById('ann-priority').value,
+    language: document.getElementById('ann-language').value,
+    pinned:   document.getElementById('ann-pin').checked,
+    gDriveLink: STATE.annAttachType === 'gdrive' ? document.getElementById('ann-gdrive').value.trim() : ''
+  };
+  if (STATE.editAnnID) {
+    payload.annID     = STATE.editAnnID;
+    payload.updatedBy = USER.accountID;
+    api('updateAnnouncement', payload, function(d) {
+      btn.disabled = false; btn.textContent = 'Save Changes';
+      if (d.success) { closeModal('announcementModal'); showToast('Announcement updated!', 'success'); loadAnnouncements(); }
+      else showToast(d.message || 'Failed to update.', 'error');
+    });
+  } else {
+    api('postAnnouncement', payload, function(d) {
+      btn.disabled = false; btn.textContent = 'Post Announcement';
+      if (d.success) { closeModal('announcementModal'); showToast('Announcement posted!', 'success'); loadAnnouncements(); }
+      else showToast(d.message || 'Failed to post.', 'error');
+    });
+  }
+}
+
+function renderAnnouncements() {
+  var container = document.getElementById('announcementsList');
+  if (!container) return;
+  if (!STATE.announcements || STATE.announcements.length === 0) {
+    container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3z"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><p>No announcements yet.</p></div>';
+    return;
+  }
+  container.innerHTML = STATE.announcements.map(function(a) {
+    return '<div class="card" style="margin-bottom:14px">' +
+      '<div class="card-body">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">' +
+          '<div style="flex:1">' +
+            (a.Pinned==='TRUE' ? '<span style="font-size:0.7rem;background:var(--amber-light);color:var(--amber);padding:2px 8px;border-radius:20px;font-weight:600;margin-bottom:6px;display:inline-block">📌 Pinned</span><br>' : '') +
+            '<strong style="font-size:0.95rem">' + esc(a.Title) + '</strong>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0">' +
+            '<span class="badge badge-' + (a.Priority==='Urgent'?'urgent':'normal') + '">' + esc(a.Priority) + '</span>' +
+            '<button class="btn btn-ghost btn-sm ann-edit-btn" data-id="' + esc(a.AnnouncementID) + '">Edit</button>' +
+            '<button class="btn btn-danger btn-sm ann-del-btn" data-id="' + esc(a.AnnouncementID) + '">Delete</button>' +
+          '</div>' +
+        '</div>' +
+        '<p style="font-size:0.83rem;color:var(--text-muted);line-height:1.5;margin-bottom:8px">' + esc(a.Body).replace(/\n/g,'<br>') + '</p>' +
+        '<div style="font-size:0.72rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap">' +
+          '<span>Posted: ' + esc(a.PostedAt) + '</span>' +
+          (a.FileURL || a.GDriveLink ? '<a href="' + esc(a.FileURL||a.GDriveLink) + '" target="_blank" style="color:var(--navy-mid)">📎 Attachment</a>' : '') +
+        '</div>' +
+      '</div></div>';
+  }).join('');
+
+  // Attach event handlers using delegation (avoids inline onclick quote issues)
+  container.querySelectorAll('.ann-edit-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { openAnnouncementModal(this.getAttribute('data-id')); });
+  });
+  container.querySelectorAll('.ann-del-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { deleteAnnouncement(this.getAttribute('data-id')); });
+  });
+}
+
+function deleteAnnouncement(id) {
+  showToast('Archiving announcement...', '');
+  api('deleteAnnouncement', { annID: id, requestedBy: USER.accountID }, function(d) {
+    if (d.success) { showToast('Announcement archived.', 'success'); loadAnnouncements(); }
+    else showToast(d.message || 'Archive failed.', 'error');
+  });
+}
+
+// ═══════════════════════════════════════════
+// TASKS — missing helpers
+// ═══════════════════════════════════════════
+function flagOrphanedTasks(workerID) {
+  var sheet_data = STATE.tasks;
+  // Client-side flag only — actual flag happens server-side via deactivateAccount
+  console.log('Orphaned tasks flagged server-side for:', workerID);
+}
+
+function deleteTask(id) {
+  showToast('Archiving task...', '');
+  api('deleteTask', { taskID: id, requestedBy: USER.accountID }, function(d) {
+    if (d.success) { showToast('Task archived successfully.', 'success'); loadTasks(); }
+    else showToast(d.message || 'Archive failed. Please try again.', 'error');
   });
 }
 
