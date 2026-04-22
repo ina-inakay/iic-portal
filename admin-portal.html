@@ -450,10 +450,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
       Tasks
       <span class="nav-badge" id="overdueTasksBadge" style="display:none">0</span>
     </div>
-    <div class="nav-item" onclick="showPanel('announcements')" data-panel="announcements">
-      <svg viewBox="0 0 24 24"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3z"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      Announcements
-    </div>
+
     <div class="nav-item" onclick="showPanel('beneficiaries')" data-panel="beneficiaries">
       <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       Beneficiaries
@@ -544,10 +541,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
       </div>
 
       <div class="two-col">
-        <div class="card">
-          <div class="card-header-plain"><h3>Recent Announcements</h3><button class="btn btn-primary btn-sm" onclick="showPanel('announcements')">View All</button></div>
-          <div class="card-body" id="dashAnnouncements"><div class="loading"><span class="spinner-sm"></span></div></div>
-        </div>
+
         <div class="card">
           <div class="card-header-plain"><h3>Pending Items</h3></div>
           <div class="card-body" id="dashPending"><div class="loading"><span class="spinner-sm"></span></div></div>
@@ -622,18 +616,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
       </div>
     </div>
 
-    <!-- ═══ ANNOUNCEMENTS ═══ -->
-    <div class="panel" id="panel-announcements">
-      <div class="section-header">
-        <div class="section-title">Announcements & Memos</div>
-        <button class="btn btn-primary" onclick="openAnnouncementModal()">
-          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Post Announcement
-        </button>
-      </div>
-      <div id="announcementsList"><div class="loading"><span class="spinner-sm"></span></div></div>
-    </div>
-
+    
     <!-- ═══ BENEFICIARIES ═══ -->
     <div class="panel" id="panel-beneficiaries">
       <div class="section-header">
@@ -808,52 +791,6 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 </div>
 
 <!-- Announcement Modal -->
-<div class="modal-overlay" id="announcementModal">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="annModalTitle">New Announcement</div>
-      <button class="modal-close" onclick="closeModal('announcementModal')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group"><label class="form-label">Title *</label><input class="form-control" id="ann-title" placeholder="Announcement title" /></div>
-      <div class="form-group"><label class="form-label">Body *</label><textarea class="form-control" id="ann-body" placeholder="Write your announcement here…" style="min-height:120px"></textarea></div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Priority</label>
-          <select class="form-control" id="ann-priority">
-            <option value="Normal">Normal</option>
-            <option value="Urgent">Urgent — Email all workers</option>
-          </select>
-        </div>
-        <div class="form-group"><label class="form-label">Language</label>
-          <select class="form-control" id="ann-language">
-            <option value="BOTH">Both (EN + FIL)</option>
-            <option value="EN">English only</option>
-            <option value="FIL">Filipino only</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Attachment (optional)</label>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-          <button class="btn btn-ghost btn-sm" id="attachTypeBtn" onclick="toggleAttachType()">Switch to GDrive Link</button>
-        </div>
-        <input type="file" class="form-control" id="ann-file" accept=".pdf,.doc,.docx,.jpg,.png" style="display:block" />
-        <input type="url" class="form-control" id="ann-gdrive" placeholder="https://drive.google.com/file/..." style="display:none" />
-        <div class="form-hint">Max file size: 5MB. Or paste a Google Drive link (ensure sharing is set to "Anyone with the link").</div>
-      </div>
-      <div class="form-group" style="display:flex;align-items:center;gap:8px">
-        <input type="checkbox" id="ann-pin" style="width:16px;height:16px;cursor:pointer" />
-        <label for="ann-pin" style="font-size:0.85rem;cursor:pointer;color:var(--text)">Pin this announcement to the top</label>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('announcementModal')">Cancel</button>
-      <button class="btn btn-primary" id="annSaveBtn" onclick="saveAnnouncement()">Post Announcement</button>
-    </div>
-  </div>
-</div>
-
-<!-- Org Chart Modal -->
 <div class="modal-overlay" id="orgModal">
   <div class="modal">
     <div class="modal-header">
@@ -1057,7 +994,7 @@ var ROLE_AVATARS = {
 var API = sessionStorage.getItem('iic_api') || '';
 var USER = null;
 var STATE = {
-  accounts: [], tasks: [], announcements: [],
+  accounts: [], tasks: [],
   beneficiaries: [], orgchart: [], programs: [],
   notifications: [], resets: [],
   taskFilter: 'all', progFilter: 'Active',
@@ -1116,7 +1053,6 @@ function loadAll() {
   showToast('Loading portal data...', '');
   loadAccounts();
   loadTasks();
-  loadAnnouncements();
   loadBeneficiaries();
   loadOrgChart();
   loadPrograms();
@@ -1146,7 +1082,7 @@ function api(action, data, cb) {
 // ═══════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════
-var panelTitles = { dashboard:'Dashboard', accounts:'Accounts', tasks:'Tasks', announcements:'Announcements', beneficiaries:'Beneficiaries', orgchart:'Org Chart', programs:'Program Types', resets:'Password Resets' };
+var panelTitles = { dashboard:'Dashboard', accounts:'Accounts', tasks:'Tasks', beneficiaries:'Beneficiaries', orgchart:'Org Chart', programs:'Program Types', resets:'Password Resets' };
 
 function showPanel(name) {
   document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
@@ -1828,11 +1764,6 @@ function updateDashboardStats() {
 }
 
 function renderDashboard() {
-  // Recent announcements
-  var annHtml = STATE.announcements.slice(0,3).map(function(a) {
-    return '<div class="log-entry"><div class="log-dot" style="background:' + (a.Priority==='Urgent'?'var(--terra)':'var(--navy-mid)') + '"></div><div><div class="log-text">' + esc(a.Title) + '</div><div class="log-time">' + esc(a.PostedAt) + ' • ' + a.Priority + '</div></div></div>';
-  }).join('');
-  document.getElementById('dashAnnouncements').innerHTML = annHtml || '<div style="color:var(--text-muted);font-size:0.82rem">No announcements yet.</div>';
 
   // Pending items
   var overdueWorkers = [];
@@ -2476,127 +2407,10 @@ function sendTaskFeedback(assignmentID, workerName, action, taskID, workerID) {
 // ═══════════════════════════════════════════
 // ANNOUNCEMENTS
 // ═══════════════════════════════════════════
-function openAnnouncementModal(annID) {
-  STATE.editAnnID = annID || null;
-  var isEdit = !!annID;
-  document.getElementById('annModalTitle').textContent = isEdit ? 'Edit Announcement' : 'New Announcement';
-  document.getElementById('ann-title').value = '';
-  document.getElementById('ann-body').value = '';
-  document.getElementById('ann-priority').value = 'Normal';
-  document.getElementById('ann-language').value = 'BOTH';
-  document.getElementById('ann-pin').checked = false;
-  document.getElementById('ann-gdrive').value = '';
-  document.getElementById('ann-file').value = '';
-  STATE.annAttachType = 'file';
-  document.getElementById('ann-file').style.display = 'block';
-  document.getElementById('ann-gdrive').style.display = 'none';
-  document.getElementById('attachTypeBtn').textContent = 'Switch to GDrive Link';
-  if (isEdit) {
-    var a = STATE.announcements.find(function(x){ return x.AnnouncementID === annID; });
-    if (a) {
-      document.getElementById('ann-title').value    = a.Title || '';
-      document.getElementById('ann-body').value     = a.Body  || '';
-      document.getElementById('ann-priority').value = a.Priority || 'Normal';
-      document.getElementById('ann-language').value = a.Language || 'BOTH';
-      document.getElementById('ann-pin').checked    = a.Pinned === 'TRUE';
-    }
-  }
-  document.getElementById('annSaveBtn').disabled = false;
-  document.getElementById('annSaveBtn').textContent = isEdit ? 'Save Changes' : 'Post Announcement';
-  openModal('announcementModal');
-}
 
-function toggleAttachType() {
-  if (STATE.annAttachType === 'file') {
-    STATE.annAttachType = 'gdrive';
-    document.getElementById('ann-file').style.display  = 'none';
-    document.getElementById('ann-gdrive').style.display = 'block';
-    document.getElementById('attachTypeBtn').textContent = 'Switch to File Upload';
-  } else {
-    STATE.annAttachType = 'file';
-    document.getElementById('ann-file').style.display  = 'block';
-    document.getElementById('ann-gdrive').style.display = 'none';
-    document.getElementById('attachTypeBtn').textContent = 'Switch to GDrive Link';
-  }
-}
 
-function saveAnnouncement() {
-  var title = document.getElementById('ann-title').value.trim();
-  var body  = document.getElementById('ann-body').value.trim();
-  if (!title || !body) { showToast('Title and body are required.', 'error'); return; }
-  var btn = document.getElementById('annSaveBtn');
-  btn.disabled = true; btn.textContent = 'Posting…';
-  var payload = {
-    postedBy: USER.accountID,
-    title:    title,
-    body:     body,
-    priority: document.getElementById('ann-priority').value,
-    language: document.getElementById('ann-language').value,
-    pinned:   document.getElementById('ann-pin').checked,
-    gDriveLink: STATE.annAttachType === 'gdrive' ? document.getElementById('ann-gdrive').value.trim() : ''
-  };
-  if (STATE.editAnnID) {
-    payload.annID     = STATE.editAnnID;
-    payload.updatedBy = USER.accountID;
-    api('updateAnnouncement', payload, function(d) {
-      btn.disabled = false; btn.textContent = 'Save Changes';
-      if (d.success) { closeModal('announcementModal'); showToast('Announcement updated!', 'success'); loadAnnouncements(); }
-      else showToast(d.message || 'Failed to update.', 'error');
-    });
-  } else {
-    api('postAnnouncement', payload, function(d) {
-      btn.disabled = false; btn.textContent = 'Post Announcement';
-      if (d.success) { closeModal('announcementModal'); showToast('Announcement posted!', 'success'); loadAnnouncements(); }
-      else showToast(d.message || 'Failed to post.', 'error');
-    });
-  }
-}
 
-function renderAnnouncements() {
-  var container = document.getElementById('announcementsList');
-  if (!container) return;
-  if (!STATE.announcements || STATE.announcements.length === 0) {
-    container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3z"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><p>No announcements yet.</p></div>';
-    return;
-  }
-  container.innerHTML = STATE.announcements.map(function(a) {
-    return '<div class="card" style="margin-bottom:14px">' +
-      '<div class="card-body">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">' +
-          '<div style="flex:1">' +
-            (a.Pinned==='TRUE' ? '<span style="font-size:0.7rem;background:var(--amber-light);color:var(--amber);padding:2px 8px;border-radius:20px;font-weight:600;margin-bottom:6px;display:inline-block">📌 Pinned</span><br>' : '') +
-            '<strong style="font-size:0.95rem">' + esc(a.Title) + '</strong>' +
-          '</div>' +
-          '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0">' +
-            '<span class="badge badge-' + (a.Priority==='Urgent'?'urgent':'normal') + '">' + esc(a.Priority) + '</span>' +
-            '<button class="btn btn-ghost btn-sm ann-edit-btn" data-id="' + esc(a.AnnouncementID) + '">Edit</button>' +
-            '<button class="btn btn-danger btn-sm ann-del-btn" data-id="' + esc(a.AnnouncementID) + '">Delete</button>' +
-          '</div>' +
-        '</div>' +
-        '<p style="font-size:0.83rem;color:var(--text-muted);line-height:1.5;margin-bottom:8px">' + esc(a.Body).replace(/\n/g,'<br>') + '</p>' +
-        '<div style="font-size:0.72rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap">' +
-          '<span>Posted: ' + esc(a.PostedAt) + '</span>' +
-          (a.FileURL || a.GDriveLink ? '<a href="' + esc(a.FileURL||a.GDriveLink) + '" target="_blank" style="color:var(--navy-mid)">📎 Attachment</a>' : '') +
-        '</div>' +
-      '</div></div>';
-  }).join('');
 
-  // Attach event handlers using delegation (avoids inline onclick quote issues)
-  container.querySelectorAll('.ann-edit-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() { openAnnouncementModal(this.getAttribute('data-id')); });
-  });
-  container.querySelectorAll('.ann-del-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() { deleteAnnouncement(this.getAttribute('data-id')); });
-  });
-}
-
-function deleteAnnouncement(id) {
-  showToast('Archiving announcement...', '');
-  api('deleteAnnouncement', { annID: id, requestedBy: USER.accountID }, function(d) {
-    if (d.success) { showToast('Announcement archived.', 'success'); loadAnnouncements(); }
-    else showToast(d.message || 'Archive failed.', 'error');
-  });
-}
 
 // ═══════════════════════════════════════════
 // TASKS — missing helpers
@@ -2614,22 +2428,10 @@ function deleteTask(id) {
     else showToast(d.message || 'Archive failed. Please try again.', 'error');
   });
 }
-
-</script>
-</body>
-</html>function loadAnnouncements() {
-  api('getAnnouncements', {}, function(d) {
-    if (!d.success) { showToast('Failed to load announcements.', 'error'); return; }
-    STATE.announcements = d.data || [];
-    renderAnnouncements();
-  });
-}
-
 function loadAll() {
   showToast('Loading portal data...', '');
   loadAccounts();
   loadTasks();
-  loadAnnouncements();
   loadBeneficiaries();
   loadOrgChart();
   loadPrograms();
@@ -2659,7 +2461,7 @@ function api(action, data, cb) {
 // ═══════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════
-var panelTitles = { dashboard:'Dashboard', accounts:'Accounts', tasks:'Tasks', announcements:'Announcements', beneficiaries:'Beneficiaries', orgchart:'Org Chart', programs:'Program Types', resets:'Password Resets' };
+var panelTitles = { dashboard:'Dashboard', accounts:'Accounts', tasks:'Tasks', beneficiaries:'Beneficiaries', orgchart:'Org Chart', programs:'Program Types', resets:'Password Resets' };
 
 function showPanel(name) {
   document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
@@ -3341,11 +3143,6 @@ function updateDashboardStats() {
 }
 
 function renderDashboard() {
-  // Recent announcements
-  var annHtml = STATE.announcements.slice(0,3).map(function(a) {
-    return '<div class="log-entry"><div class="log-dot" style="background:' + (a.Priority==='Urgent'?'var(--terra)':'var(--navy-mid)') + '"></div><div><div class="log-text">' + esc(a.Title) + '</div><div class="log-time">' + esc(a.PostedAt) + ' • ' + a.Priority + '</div></div></div>';
-  }).join('');
-  document.getElementById('dashAnnouncements').innerHTML = annHtml || '<div style="color:var(--text-muted);font-size:0.82rem">No announcements yet.</div>';
 
   // Pending items
   var overdueWorkers = [];
@@ -3989,36 +3786,6 @@ function sendTaskFeedback(assignmentID, workerName, action, taskID, workerID) {
 // ═══════════════════════════════════════════
 // ANNOUNCEMENTS
 // ═══════════════════════════════════════════
-function openAnnouncementModal(annID) {
-  STATE.editAnnID = annID || null;
-  var isEdit = !!annID;
-  document.getElementById('annModalTitle').textContent = isEdit ? 'Edit Announcement' : 'New Announcement';
-  document.getElementById('ann-title').value = '';
-  document.getElementById('ann-body').value = '';
-  document.getElementById('ann-priority').value = 'Normal';
-  document.getElementById('ann-language').value = 'BOTH';
-  document.getElementById('ann-pin').checked = false;
-  document.getElementById('ann-gdrive').value = '';
-  document.getElementById('ann-file').value = '';
-  STATE.annAttachType = 'file';
-  document.getElementById('ann-file').style.display = 'block';
-  document.getElementById('ann-gdrive').style.display = 'none';
-  document.getElementById('attachTypeBtn').textContent = 'Switch to GDrive Link';
-  if (isEdit) {
-    var a = STATE.announcements.find(function(x){ return x.AnnouncementID === annID; });
-    if (a) {
-      document.getElementById('ann-title').value    = a.Title || '';
-      document.getElementById('ann-body').value     = a.Body  || '';
-      document.getElementById('ann-priority').value = a.Priority || 'Normal';
-      document.getElementById('ann-language').value = a.Language || 'BOTH';
-      document.getElementById('ann-pin').checked    = a.Pinned === 'TRUE';
-    }
-  }
-  document.getElementById('annSaveBtn').disabled = false;
-  document.getElementById('annSaveBtn').textContent = isEdit ? 'Save Changes' : 'Post Announcement';
-  openModal('announcementModal');
-}
-
 function toggleAttachType() {
   if (STATE.annAttachType === 'file') {
     STATE.annAttachType = 'gdrive';
@@ -4031,84 +3798,6 @@ function toggleAttachType() {
     document.getElementById('ann-gdrive').style.display = 'none';
     document.getElementById('attachTypeBtn').textContent = 'Switch to GDrive Link';
   }
-}
-
-function saveAnnouncement() {
-  var title = document.getElementById('ann-title').value.trim();
-  var body  = document.getElementById('ann-body').value.trim();
-  if (!title || !body) { showToast('Title and body are required.', 'error'); return; }
-  var btn = document.getElementById('annSaveBtn');
-  btn.disabled = true; btn.textContent = 'Posting…';
-  var payload = {
-    postedBy: USER.accountID,
-    title:    title,
-    body:     body,
-    priority: document.getElementById('ann-priority').value,
-    language: document.getElementById('ann-language').value,
-    pinned:   document.getElementById('ann-pin').checked,
-    gDriveLink: STATE.annAttachType === 'gdrive' ? document.getElementById('ann-gdrive').value.trim() : ''
-  };
-  if (STATE.editAnnID) {
-    payload.annID     = STATE.editAnnID;
-    payload.updatedBy = USER.accountID;
-    api('updateAnnouncement', payload, function(d) {
-      btn.disabled = false; btn.textContent = 'Save Changes';
-      if (d.success) { closeModal('announcementModal'); showToast('Announcement updated!', 'success'); loadAnnouncements(); }
-      else showToast(d.message || 'Failed to update.', 'error');
-    });
-  } else {
-    api('postAnnouncement', payload, function(d) {
-      btn.disabled = false; btn.textContent = 'Post Announcement';
-      if (d.success) { closeModal('announcementModal'); showToast('Announcement posted!', 'success'); loadAnnouncements(); }
-      else showToast(d.message || 'Failed to post.', 'error');
-    });
-  }
-}
-
-function renderAnnouncements() {
-  var container = document.getElementById('announcementsList');
-  if (!container) return;
-  if (!STATE.announcements || STATE.announcements.length === 0) {
-    container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3z"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><p>No announcements yet.</p></div>';
-    return;
-  }
-  container.innerHTML = STATE.announcements.map(function(a) {
-    return '<div class="card" style="margin-bottom:14px">' +
-      '<div class="card-body">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">' +
-          '<div style="flex:1">' +
-            (a.Pinned==='TRUE' ? '<span style="font-size:0.7rem;background:var(--amber-light);color:var(--amber);padding:2px 8px;border-radius:20px;font-weight:600;margin-bottom:6px;display:inline-block">📌 Pinned</span><br>' : '') +
-            '<strong style="font-size:0.95rem">' + esc(a.Title) + '</strong>' +
-          '</div>' +
-          '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0">' +
-            '<span class="badge badge-' + (a.Priority==='Urgent'?'urgent':'normal') + '">' + esc(a.Priority) + '</span>' +
-            '<button class="btn btn-ghost btn-sm ann-edit-btn" data-id="' + esc(a.AnnouncementID) + '">Edit</button>' +
-            '<button class="btn btn-danger btn-sm ann-del-btn" data-id="' + esc(a.AnnouncementID) + '">Delete</button>' +
-          '</div>' +
-        '</div>' +
-        '<p style="font-size:0.83rem;color:var(--text-muted);line-height:1.5;margin-bottom:8px">' + esc(a.Body).replace(/\n/g,'<br>') + '</p>' +
-        '<div style="font-size:0.72rem;color:var(--text-muted);display:flex;gap:12px;flex-wrap:wrap">' +
-          '<span>Posted: ' + esc(a.PostedAt) + '</span>' +
-          (a.FileURL || a.GDriveLink ? '<a href="' + esc(a.FileURL||a.GDriveLink) + '" target="_blank" style="color:var(--navy-mid)">📎 Attachment</a>' : '') +
-        '</div>' +
-      '</div></div>';
-  }).join('');
-
-  // Attach event handlers using delegation (avoids inline onclick quote issues)
-  container.querySelectorAll('.ann-edit-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() { openAnnouncementModal(this.getAttribute('data-id')); });
-  });
-  container.querySelectorAll('.ann-del-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() { deleteAnnouncement(this.getAttribute('data-id')); });
-  });
-}
-
-function deleteAnnouncement(id) {
-  showToast('Archiving announcement...', '');
-  api('deleteAnnouncement', { annID: id, requestedBy: USER.accountID }, function(d) {
-    if (d.success) { showToast('Announcement archived.', 'success'); loadAnnouncements(); }
-    else showToast(d.message || 'Archive failed.', 'error');
-  });
 }
 
 // ═══════════════════════════════════════════
