@@ -2430,9 +2430,9 @@ function sendTaskFeedback(assignmentID, workerName, action, taskID, workerID) {
   var payload = {
     assignmentID: assignmentID,
     workerID: workerID || USER.accountID,
-    remarks: (assignment && assignment.remarks ? assignment.remarks + '
+    remarks: (assignment && assignment.remarks ? (assignment.remarks + '\n\n') : '') + fullFeedback,
 
-' : '') + fullFeedback,
+
     gDriveLink: assignment ? (assignment.gDriveLink || '') : ''
   };
   if (newStatus) payload.status = newStatus;
