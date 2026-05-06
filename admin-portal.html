@@ -609,7 +609,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>Task ID</th><th>Title</th><th>Priority</th><th>Deadline</th><th>Status</th><th>Assigned To</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Task ID</th><th>Title</th><th>Priority</th><th>Deadline</th><th>Status</th><th>Assigned To</th><th>Created By</th><th>Actions</th></tr></thead>
             <tbody id="tasksTableBody"><tr><td colspan="7"><div class="loading"><span class="spinner-sm"></span></div></td></tr></tbody>
           </table>
         </div>
@@ -993,6 +993,9 @@ var ROLE_AVATARS = {
 // ═══════════════════════════════════════════
 var API = sessionStorage.getItem('iic_api') || '';
 var USER = null;
+var ROLE_SUPER  = 'superadmin';
+var ROLE_ADMIN  = 'admin';
+var ROLE_WORKER = 'worker';
 var STATE = {
   accounts: [], tasks: [],
   beneficiaries: [], orgchart: [], programs: [],
@@ -1230,7 +1233,14 @@ function filterAccountsByStatus(v) { STATE.accountStatusFilter = v; renderAccoun
 function populateWorkerDropdown() {
   var sel = document.getElementById('task-workers');
   sel.innerHTML = '';
-  STATE.accounts.filter(function(a){ return a.Status==='Active'; }).forEach(function(a) {
+  STATE.accounts.filter(function(a) {
+    if (a.Status !== 'Active') return false;
+    if (a.AccountID === USER.accountID) return false; // can't assign to yourself
+    // Admin can only assign to workers
+    // SuperAdmin can assign to anyone
+    if (USER.role === 'admin') return a.Role === 'worker';
+    return true; // superadmin sees all
+  }).forEach(function(a) {
     var opt = document.createElement('option');
     opt.value = a.AccountID;
     opt.textContent = a.FullName + ' (' + a.Role + ')';
@@ -1349,6 +1359,10 @@ function loadTasks() {
 }
 
 function renderTasks() {
+  // Build accountID -> name lookup for CreatedBy display
+  var accountNames = {};
+  STATE.accounts.forEach(function(a) { accountNames[a.AccountID] = a.FullName || a.Username; });
+
   var data = STATE.tasks.filter(function(t) {
     if (STATE.taskFilter === 'all') return t.Status !== 'Archived';
     if (STATE.taskFilter === 'Overdue') return t.assignments && t.assignments.some(function(a){ return a.status==='Overdue'; });
@@ -1360,16 +1374,26 @@ function renderTasks() {
     var workers = (t.assignments||[]).map(function(a){ return '<span class="chip">' + esc(a.workerName) + '</span>'; }).join('');
     var hasOverdue = (t.assignments||[]).some(function(a){ return a.status==='Overdue'; });
     var status = hasOverdue ? 'Overdue' : t.Status;
+    // Option B: determine creator and assignment status
+    var iAmCreator  = (t.CreatedBy === USER.accountID) || (USER.role === 'superadmin');
+    var myAssignment = (t.assignments||[]).find(function(a){ return a.workerID === USER.accountID; });
+    var iAmAssigned  = !!myAssignment;
+    var myBadge = iAmAssigned && myAssignment
+      ? ' <span class="badge badge-'+(myAssignment.status==='Done'?'done':myAssignment.status==='Overdue'?'overdue':'progress')+'" style="font-size:0.62rem">Mine: '+myAssignment.status+'</span>'
+      : '';
+
     return '<tr>' +
       '<td style="color:var(--text-muted);font-size:0.78rem">' + esc(t.TaskID) + '</td>' +
-      '<td><strong>' + esc(t.Title) + '</strong></td>' +
+      '<td><strong>' + esc(t.Title) + '</strong>' + myBadge + '</td>' +
       '<td><span class="badge badge-' + (t.Priority==='Urgent'?'urgent':'normal') + '">' + t.Priority + '</span></td>' +
       '<td>' + esc(t.Deadline||'—') + '</td>' +
       '<td><span class="badge badge-' + (status==='Closed'?'done':status==='Overdue'?'overdue':status==='Open'?'progress':'') + '">' + status + '</span></td>' +
       '<td>' + (workers||'<span style="color:var(--text-muted)">—</span>') + '</td>' +
+      '<td style="font-size:0.78rem;color:var(--text-muted)">' + esc(accountNames[t.CreatedBy]||t.CreatedBy||'—') + '</td>' +
       '<td><div class="td-actions">' +
-        '<button class="btn btn-ghost btn-sm" onclick="viewTask(\'' + t.TaskID + '\')">View</button>' +
-        (t.Status !== 'Archived' ? '<button class="btn btn-danger btn-sm" onclick="deleteTask(\'' + t.TaskID + '\')">Archive</button>' : '') +
+        '<button class="btn btn-ghost btn-sm task-view-btn" data-id="' + esc(t.TaskID) + '">' + (iAmCreator ? '📋 Review' : '👁 View') + '</button>' +
+        (iAmCreator && t.Status !== 'Archived' ? '<button class="btn btn-danger btn-sm task-archive-btn" data-id="' + esc(t.TaskID) + '">Archive</button>' : '') +
+        (iAmAssigned && myAssignment && myAssignment.status !== 'Done' ? '<button class="btn btn-primary btn-sm task-update-btn" data-id="' + esc(t.TaskID) + '">Update</button>' : '') +
       '</div></td></tr>';
   }).join('');
 
@@ -1490,11 +1514,19 @@ function viewTask(id) {
     out += '<textarea id="fb-' + safeID + '" class="form-control" placeholder="Write feedback for ' + esc(a.workerName) + '..." style="min-height:70px;font-size:0.83rem;margin-bottom:8px"></textarea>';
     out += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
 
-    if (a.status === 'Done' || a.status === 'In Progress' || a.status === 'Overdue') {
-      out += '<button class="btn btn-success btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="accept" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">✓ Accept</button>';
-      out += '<button class="btn btn-warn btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="revise" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">↩ Request Revision</button>';
+    // Only task CREATOR can give feedback
+    var iAmTaskCreator = (t.CreatedBy === USER.accountID) || (USER.role === 'superadmin');
+    if (iAmTaskCreator) {
+      if (a.status === 'Done' || a.status === 'In Progress' || a.status === 'Overdue') {
+        out += '<button class="btn btn-success btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="accept" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">✓ Accept</button>';
+        out += '<button class="btn btn-warn btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="revise" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">↩ Request Revision</button>';
+      }
+      out += '<button class="btn btn-ghost btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="note" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">💬 Send Note</button>';
+    } else if (a.workerID === USER.accountID) {
+      out += '<div style="font-size:0.78rem;color:var(--navy-mid);font-style:italic">You are assigned. Update your progress from the task list.</div>';
+    } else {
+      out += '<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic">Only the task creator can send feedback.</div>';
     }
-    out += '<button class="btn btn-ghost btn-sm task-fb-btn" data-asgn="' + safeID + '" data-worker="' + esc(a.workerName) + '" data-action="note" data-task="' + esc(t.TaskID) + '" data-wid="' + esc(a.workerID||'') + '">💬 Send Note</button>';
     out += '</div>';
     out += '</div>'; // end feedback
     out += '</div>'; // end card
@@ -2609,7 +2641,14 @@ function filterAccountsByStatus(v) { STATE.accountStatusFilter = v; renderAccoun
 function populateWorkerDropdown() {
   var sel = document.getElementById('task-workers');
   sel.innerHTML = '';
-  STATE.accounts.filter(function(a){ return a.Status==='Active'; }).forEach(function(a) {
+  STATE.accounts.filter(function(a) {
+    if (a.Status !== 'Active') return false;
+    if (a.AccountID === USER.accountID) return false; // can't assign to yourself
+    // Admin can only assign to workers
+    // SuperAdmin can assign to anyone
+    if (USER.role === 'admin') return a.Role === 'worker';
+    return true; // superadmin sees all
+  }).forEach(function(a) {
     var opt = document.createElement('option');
     opt.value = a.AccountID;
     opt.textContent = a.FullName + ' (' + a.Role + ')';
@@ -2728,6 +2767,10 @@ function loadTasks() {
 }
 
 function renderTasks() {
+  // Build accountID -> name lookup for CreatedBy display
+  var accountNames = {};
+  STATE.accounts.forEach(function(a) { accountNames[a.AccountID] = a.FullName || a.Username; });
+
   var data = STATE.tasks.filter(function(t) {
     if (STATE.taskFilter === 'all') return t.Status !== 'Archived';
     if (STATE.taskFilter === 'Overdue') return t.assignments && t.assignments.some(function(a){ return a.status==='Overdue'; });
